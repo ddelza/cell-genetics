@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>세포분열과 유전 표현하기 · 3학년 과학</title>
-<link rel="stylesheet" href="common.css?v=1">
+<link rel="stylesheet" href="common.css?v=2">
 <style>
 .step { display: none; }
 .step.active { display: block; }
@@ -69,17 +69,17 @@
       <b>📌 이번 수행평가에서 하는 일</b>
       <ol style="margin:6px 0 0;padding-left:20px">
         <li><b>판다로 확인하는 멘델의 유전법칙</b> — 마인크래프트 모의 활동 결과로 유전 원리를 분석·도출해요. <span class="dc-muted">(유전의 원리 분석·도출하기 9점)</span></li>
-        <li><b>세포분열 표현하기</b> — 모둠별로 매체(💻 바이브코딩 · 🤸 신체표현 · 🍬 젤리활용)를 골라 체세포 분열과 감수 분열을 표현하고 발표한 뒤, 개인 논술을 써요. <span class="dc-muted">(매체 활용 2 · 분열 과정 표현 4 · 특징 비교·분석 3)</span></li>
+        <li><b>세포분열 표현하기</b> — 매체(💻 바이브코딩 · 🤸 신체표현 · 🍬 젤리활용)와 분열(🔵 체세포 · 🟣 생식세포)을 선착순으로 골라 모둠을 만들고, 모둠별로 표현·발표한 뒤 개인 논술을 써요. <span class="dc-muted">(매체 활용 2 · 분열 과정 표현 4 · 특징 비교·분석 3)</span></li>
       </ol>
       <p class="dc-muted" style="margin:8px 0 0">논술은 개인 평가예요. 친구 글을 베끼거나 AI가 쓴 글을 그대로 내면 안 돼요.</p>
     </div>
 
     <div id="sessionList"></div>
-    <p style="text-align:center;margin-top:24px"><a href="teacher.html" style="font-size:0.75rem;color:var(--text-muted)">교사용 현황</a></p>
+    <p style="text-align:center;margin-top:24px"><a href="teacher-groups.html" style="font-size:0.75rem;color:var(--text-muted)">교사용 모둠 편성</a> · <a href="teacher.html" style="font-size:0.75rem;color:var(--text-muted)">교사용 채점</a></p>
   </div>
 </div>
 
-<script src="session.js?v=1"></script>
+<script src="session.js?v=2"></script>
 <script>
 const DB_URL = 'https://gwangsu-on-default-rtdb.firebaseio.com';
 const TEACHER_ID = '3000';
@@ -94,8 +94,9 @@ const SESSIONS = [
     { label: '🐼 결과 기록 + 유전의 원리 분석·도출하기 (논술 9점)', href: 'panda.html' },
   ] },
   { title: '활동 2 · 세포분열 표현하기', links: [
-    { label: '① 모둠 표현 자료 올리기 · 다른 모둠 둘러보기', href: 'division-show.html' },
-    { label: '② 개인 논술 — 매체 활용 · 분열 과정 표현 · 특징 비교 (9점)', href: 'division-essay.html' },
+    { label: '① 매체·분열 고르기 (선착순 모둠 편성)', href: 'group-pick.html' },
+    { label: '② 모둠 표현 자료 올리기 · 다른 모둠 둘러보기', href: 'division-show.html' },
+    { label: '③ 개인 논술 — 매체 활용 · 분열 과정 표현 · 특징 비교 (9점)', href: 'division-essay.html' },
   ] },
 ];
 

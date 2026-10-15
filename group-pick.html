@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>매체·분열 고르기 (모둠 편성) — 세포분열과 유전 표현하기</title>
+<link rel="stylesheet" href="common.css?v=2">
+<style>
+.wrap { max-width: 720px; }
+.status { border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; font-size: 0.88rem; line-height: 1.6; text-align: center; }
+.status.wait { background: #fff4e6; border: 1.5px solid #ffc078; color: #a85d00; }
+.status.open { background: #ebfbee; border: 1.5px solid #8ce99a; color: #2b8a3e; }
+.status.closed { background: #f1f3f5; border: 1.5px solid #ced4da; color: #495057; }
+.mine-box { background: var(--accent); color: #fff; border-radius: 12px; padding: 14px; text-align: center; margin-bottom: 14px; font-weight: 700; line-height: 1.6; }
+.mine-box small { display: block; font-weight: 400; opacity: 0.9; }
+.slot-grid { display: grid; grid-template-columns: 76px 1fr 1fr; gap: 8px; align-items: stretch; }
+.slot-grid .hd { font-size: 0.78rem; font-weight: 700; text-align: center; color: var(--text-muted); align-self: end; }
+.slot-grid .mh { display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; text-align: center; background: var(--surface); border-radius: 12px; }
+.slot-grid .mh span { font-size: 1.5rem; }
+.slot { background: var(--surface); border-radius: 12px; padding: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; flex-direction: column; gap: 6px; border: 2px solid transparent; }
+.slot.mine { border-color: var(--accent); background: #f4fbf5; }
+.slot.full:not(.mine) { opacity: 0.6; }
+.slot .top { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.78rem; }
+.slot .no { font-weight: 800; }
+.slot .cnt { font-weight: 700; color: var(--accent); }
+.slot.full .cnt { color: var(--danger); }
+.slot .mem { font-size: 0.78rem; line-height: 1.5; min-height: 2.2em; color: #444; flex: 1; }
+.slot .mem .me { font-weight: 800; color: var(--accent); }
+.slot button { padding: 9px; border: none; border-radius: 9px; background: var(--accent); color: #fff; font-weight: 700; font-size: 0.85rem; cursor: pointer; font-family: inherit; }
+.slot button:disabled { background: #ced4da; cursor: default; }
+@media (max-width: 420px) { .slot-grid { grid-template-columns: 52px 1fr 1fr; gap: 6px; } .slot { padding: 8px; } .slot-grid .mh { font-size: 0.7rem; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="dc-head"></div>
+  <div class="card" style="font-size:0.84rem;line-height:1.65">
+    <b>🧩 어떻게 하나요?</b>
+    <ul style="margin:6px 0 0;padding-left:20px">
+      <li><b>매체</b>(💻 바이브코딩 · 🤸 신체표현 · 🍬 젤리활용)와 <b>분열</b>(🔵 체세포 분열 · 🟣 생식세포 분열)을 함께 골라요. 고른 칸이 곧 <b>내 모둠</b>이에요.</li>
+      <li><b>선착순</b>이에요. 칸마다 정원이 있고, 차면 마감돼요.</li>
+      <li>선생님이 마감하기 전까지는 다른 칸으로 옮길 수 있어요. 옮기면 원래 자리는 다른 친구가 가져갈 수 있어요.</li>
+    </ul>
+  </div>
+  <div id="status"></div>
+  <div id="mine"></div>
+  <div id="grid"><div class="loading-state">불러오는 중...</div></div>
+</div>
+
+<script src="session.js?v=2"></script>
+<script src="cg.js?v=2"></script>
+<script>
+let ban, conf = {}, picks = {}, cap = 4, rosterN = 0, busy = false;
+const me = () => DC.student.id;
+
+async function load() {
+  const [c, p] = await Promise.all([DC.get(`pickConfig/${ban}`).catch(() => null), DC.get(`pick/${ban}`).catch(() => null)]);
+  conf = c || {}; picks = p || {};
+  cap = conf.cap || DC.defaultCap(rosterN);
+  paint();
+}
+
+function paint() {
+  const st = document.getElementById('status');
+  const myPick = picks[me()];
+  if (conf.open) st.innerHTML = `<div class="status open">🟢 <b>지금 고를 수 있어요!</b> 칸마다 정원 <b>${cap}명</b> · 선착순</div>`;
+  else if (Object.keys(picks).length) st.innerHTML = `<div class="status closed">🔒 <b>고르기가 마감되었어요.</b> 모둠 편성이 끝났어요.</div>`;
+  else st.innerHTML = `<div class="status wait">⏳ <b>아직 시작 전이에요.</b> 선생님이 시작하면 이 화면에서 바로 고를 수 있어요. (새로고침 안 해도 돼요)</div>`;
+
+  document.getElementById('mine').innerHTML = myPick && DC.slot(myPick.slot)
+    ? `<div class="mine-box">내 모둠: ${DC.esc(DC.slotLabel(myPick.slot))}<small>모둠원: ${DC.slotMembers(picks, myPick.slot).map(m => DC.esc(m.name)).join(', ')}</small></div>` : '';
+
+  let h = '<div class="slot-grid"><div></div>' + DC.DIVS.map(d => `<div class="hd">${DC.DIV_ICON[d]} ${d}</div>`).join('');
+  DC.MEDIA.forEach(m => {
+    h += `<div class="mh"><span>${DC.MEDIA_ICON[m]}</span>${m}</div>`;
+    DC.SLOTS.filter(s => s.media === m).forEach(s => {
+      const mem = DC.slotMembers(picks, s.id);
+      const mine = myPick && myPick.slot === s.id, full = mem.length >= cap;
+      const btn = mine ? '<button disabled>✓ 내 모둠</button>'
+        : `<button data-slot="${s.id}" ${!conf.open || full || busy ? 'disabled' : ''}>${full ? '마감' : myPick ? '여기로 옮기기' : '여기 고르기'}</button>`;
+      h += `<div class="slot${mine ? ' mine' : ''}${full ? ' full' : ''}"><div class="top"><span class="no">${s.no}모둠</span><span class="cnt">${mem.length} / ${cap}</span></div>` +
+        `<div class="mem">${mem.map(x => `<span class="${x.id === me() ? 'me' : ''}">${x.num ? x.num + ' ' : ''}${DC.esc(x.name)}</span>`).join(', ') || '<span class="dc-muted">아직 없음</span>'}</div>${btn}</div>`;
+    });
+  });
+  document.getElementById('grid').innerHTML = h + '</div>';
+}
+
+async function choose(slotId) {
+  if (busy) return;
+  const prev = picks[me()];
+  if (prev && prev.slot === slotId) return;
+  if (prev && !confirm(`지금 모둠(${DC.slotLabel(prev.slot)})을 놓고\n${DC.slotLabel(slotId)}(으)로 옮길까요?\n\n옮기면 원래 자리는 다른 친구가 가져갈 수 있어요.`)) return;
+  busy = true; paint();
+  try {
+    await load(); // 최신 상태로 다시 확인
+    if (!conf.open) { alert('고르기가 마감되었어요.'); return; }
+    if (DC.slotMembers(picks, slotId).length >= cap) { alert('아쉽게도 그 칸은 방금 마감되었어요. 다른 칸을 골라 주세요.'); return; }
+    const path = `pick/${ban}/${me()}`;
+    await DC.put(path, { slot: slotId, name: DC.student.name, num: DC.student.num || 0, ts: { '.sv': 'timestamp' } });
+    // 서버 시각 순으로 내 순번 확인 — 정원 밖이면(동시에 누른 친구가 더 빨랐으면) 내 선택을 되돌린다.
+    const all = (await DC.get(`pick/${ban}`)) || {};
+    const rank = DC.slotMembers(all, slotId).findIndex(x => x.id === me());
+    if (rank >= cap) {
+      if (prev) await DC.put(path, prev); else await DC.del(path);
+      alert('아쉽게도 한발 늦었어요! 그 사이 정원이 찼어요.' + (prev ? '\n원래 모둠은 그대로예요.' : '\n다른 칸을 골라 주세요.'));
+    }
+  } catch (e) {
+    alert('저장하지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.');
+  } finally {
+    busy = false; await load();
+  }
+}
+
+document.getElementById('grid').addEventListener('click', e => {
+  const b = e.target.closest('button[data-slot]'); if (b) choose(b.dataset.slot);
+});
+
+DC.start({ title: '🧩 매체·분열 고르기', subtitle: '활동 2 · 1차시 모둠 편성 (선착순)' }).then(async () => {
+  ban = DC.myBan();
+  rosterN = await DC.loadRosterCount(ban);
+  await load();
+  // 선생님이 "고르기 시작"을 누르거나 친구가 고르면 즉시 반영(실시간 스트림) + 끊김 대비 느린 폴링
+  const onChange = () => { if (!busy) load(); };
+  const live = DC.listen(`pickConfig/${ban}`, onChange) && DC.listen(`pick/${ban}`, onChange);
+  setInterval(() => { if (!document.hidden && !busy) load(); }, live ? 10000 : 2500);
+});
+</script>
+</body>
+</html>

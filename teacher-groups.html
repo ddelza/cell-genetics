@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>교사용 모둠 편성 — 세포분열과 유전 표현하기</title>
+<link rel="stylesheet" href="common.css?v=2">
+<style>
+.wrap { max-width: 1150px; }
+.step { display: none; } .step.active { display: block; }
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.toolbar select, .toolbar input { padding: 9px; border-radius: 10px; border: 1.5px solid var(--accent); font-family: inherit; font-size: 0.88rem; }
+.toolbar input { width: 70px; }
+.toolbar .btn { width: auto; margin: 0; }
+.big { font-size: 1rem !important; padding: 12px 18px !important; }
+.btn.stop { background: var(--danger); }
+.navlinks { font-size: 0.82rem; margin-bottom: 10px; }
+.navlinks a { color: var(--accent); margin-right: 12px; font-weight: 700; }
+.state { font-weight: 700; padding: 6px 12px; border-radius: 999px; font-size: 0.85rem; }
+.state.on { background: #ebfbee; color: #2b8a3e; } .state.off { background: #f1f3f5; color: #495057; }
+.groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 800px) { .groups { grid-template-columns: 1fr; } }
+.gbox { background: var(--surface); border-radius: 12px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.gbox h4 { margin: 0 0 6px; font-size: 0.88rem; display: flex; justify-content: space-between; gap: 6px; }
+.gbox h4 .cnt { color: var(--accent); }
+.gbox h4 .cnt.over { color: var(--danger); }
+.mrow { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; padding: 3px 0; border-top: 1px solid #f1f3f5; }
+.mrow:first-of-type { border-top: none; }
+.mrow .nm { flex: 1; }
+.mrow .t { color: var(--text-muted); font-size: 0.7rem; }
+.mrow select { font-size: 0.74rem; padding: 3px; border-radius: 6px; border: 1px solid var(--border); max-width: 130px; }
+.unassigned { margin-top: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header"><h1>🧩 세포분열 표현하기 · 모둠 편성 (교사용)</h1><p id="semLabel"></p></div>
+
+  <div class="step active" id="step-pw">
+    <div class="card" style="max-width:420px;margin:0 auto">
+      <h2>비밀번호</h2>
+      <input type="password" id="pwInput">
+      <div class="error-msg" id="pwError"></div>
+      <button class="btn" onclick="checkPw()">입장</button>
+    </div>
+  </div>
+
+  <div class="step" id="step-main">
+    <div class="navlinks"><a href="teacher.html">📝 채점 페이지</a><a href="teacher-groups.html">🧩 모둠 편성</a></div>
+    <div class="toolbar">
+      <select id="banSelect" onchange="changeBan()"></select>
+      <span class="state" id="stateTag"></span>
+      <button class="btn big" id="toggleBtn" onclick="toggleOpen()"></button>
+    </div>
+    <div class="toolbar">
+      <span style="font-size:0.85rem">칸당 정원</span><input type="number" id="capIn" min="1"><button class="btn small secondary" onclick="saveCap()">정원 저장</button>
+      <span class="dc-muted" id="capInfo"></span>
+      <button class="btn small secondary" onclick="autoAssign()">🎲 남은 학생 자동 배정</button>
+      <button class="btn small danger-outline" onclick="resetAll()">🗑 이 반 편성 초기화</button>
+      <span class="dc-muted" id="loadInfo"></span>
+    </div>
+    <p class="hint">"▶ 고르기 시작"을 누르면 <b>학생 화면에 새로고침 없이 즉시</b> 선착순이 열려요(실시간 연결). 학생들은 미리 "매체·분열 고르기" 화면을 열어 두고 기다리게 하세요. 각 학생 옆 목록으로 모둠을 옮길 수 있어요(교사 이동은 정원 제한 없음).</p>
+    <div class="groups" id="groups"></div>
+    <div class="card unassigned" id="unassigned"></div>
+  </div>
+</div>
+
+<script src="session.js?v=2"></script>
+<script src="cg.js?v=2"></script>
+<script>
+const PASSWORD = 'byung0703!';
+let roster = {}, ban = '', conf = {}, picks = {}, rosterN = 0;
+
+window.checkPw = function () {
+  if (document.getElementById('pwInput').value !== PASSWORD) {
+    const e = document.getElementById('pwError'); e.textContent = '비밀번호가 다릅니다.'; e.classList.add('show'); return;
+  }
+  document.getElementById('step-pw').classList.remove('active');
+  document.getElementById('step-main').classList.add('active');
+  init();
+};
+document.getElementById('pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') checkPw(); });
+DC.student = { id: '3000', name: '김병선', isTeacher: true };
+
+async function init() {
+  await DC.start({ needLogin: false });
+  document.getElementById('semLabel').textContent = `${DC.cfg.year}학년도 ${DC.cfg.sem}학기`;
+  roster = await fetch(`${DC.DB_URL}/years/${DC.cfg.year}/students.json`).then(r => r.json()) || {};
+  const bans = new Set(Object.values(roster).filter(s => String(s.grade) === '3').map(s => `${s.grade}-${s.ban}`));
+  const sh = await DC.get('pick?shallow=true').catch(() => null);
+  Object.keys(sh || {}).forEach(b => bans.add(b));
+  bans.add('T');
+  const list = [...bans].sort((a, b) => { const [ga, ba] = a.split('-').map(Number), [gb, bb] = b.split('-').map(Number); return (ga - gb) || (ba - bb) || a.localeCompare(b); });
+  document.getElementById('banSelect').innerHTML = list.map(b => `<option value="${DC.escAttr(b)}">${DC.esc(DC.banLabel(b))}</option>`).join('');
+  changeBan();
+  setInterval(() => { if (!document.hidden && !typing()) load(); }, 10000);
+}
+const typing = () => document.activeElement && ['SELECT', 'INPUT'].includes(document.activeElement.tagName);
+let streams = [];
+
+function banStudents() {
+  const [g, b] = ban.split('-');
+  return Object.entries(roster).filter(([, s]) => String(s.grade) === g && String(s.ban) === b)
+    .map(([id, s]) => ({ id, name: s.name, num: s.num })).sort((x, y) => x.num - y.num);
+}
+
+window.changeBan = async function () {
+  ban = document.getElementById('banSelect').value;
+  rosterN = banStudents().length;
+  document.getElementById('capIn').value = '';
+  // 반을 바꾸면 그 반 데이터만 실시간 감시
+  streams.forEach(s => s && s.close());
+  const onChange = () => { if (!typing()) load(); };
+  streams = [DC.listen(`pick/${ban}`, onChange), DC.listen(`pickConfig/${ban}`, onChange)];
+  await load();
+};
+
+async function load() {
+  const [c, p] = await Promise.all([DC.get(`pickConfig/${ban}`).catch(() => null), DC.get(`pick/${ban}`).catch(() => null)]);
+  conf = c || {}; picks = p || {};
+  paint();
+  document.getElementById('loadInfo').textContent = `갱신 ${new Date().toLocaleTimeString()}`;
+}
+const cap = () => conf.cap || DC.defaultCap(rosterN);
+
+function moveSelect(id, cur) {
+  return `<select onchange="moveTo('${DC.escAttr(id)}', this.value)"><option value="">${cur ? '옮기기…' : '배정…'}</option>` +
+    DC.SLOTS.filter(s => s.id !== cur).map(s => `<option value="${s.id}">${s.no}모둠 ${DC.MEDIA_ICON[s.media]}${DC.DIV_ICON[s.div]}</option>`).join('') +
+    (cur ? '<option value="__none">배정 해제</option>' : '') + '</select>';
+}
+
+function paint() {
+  const tag = document.getElementById('stateTag'), btn = document.getElementById('toggleBtn');
+  tag.className = 'state ' + (conf.open ? 'on' : 'off');
+  tag.textContent = conf.open ? '🟢 고르는 중' : '🔒 닫힘';
+  btn.textContent = conf.open ? '■ 마감하기' : '▶ 고르기 시작';
+  btn.classList.toggle('stop', !!conf.open);
+  const capIn = document.getElementById('capIn');
+  if (document.activeElement !== capIn && !capIn.value) capIn.placeholder = cap();
+  document.getElementById('capInfo').textContent = `현재 ${cap()}명 (${conf.cap ? '직접 설정' : `기본값: ${rosterN}명 ÷ 6 올림`}) · 총 ${cap() * DC.GROUP_COUNT}자리`;
+
+  document.getElementById('groups').innerHTML = DC.SLOTS.map(s => {
+    const mem = DC.slotMembers(picks, s.id);
+    return `<div class="gbox"><h4><span>${DC.esc(DC.slotLabel(s.id))}</span><span class="cnt${mem.length > cap() ? ' over' : ''}">${mem.length}/${cap()}</span></h4>` +
+      (mem.map(m => `<div class="mrow"><span class="nm">${m.num ? m.num + '번 ' : ''}${DC.esc(m.name)}${m.byTeacher ? ' <span class="t">(교사)</span>' : ''}</span><span class="t">${m.ts ? new Date(m.ts).toLocaleTimeString() : ''}</span>${moveSelect(m.id, s.id)}</div>`).join('') || '<div class="dc-muted" style="font-size:0.8rem">아직 없음</div>') + '</div>';
+  }).join('');
+
+  const un = banStudents().filter(s => !picks[s.id] || !DC.slot(picks[s.id].slot));
+  document.getElementById('unassigned').innerHTML = `<h2>아직 안 고른 학생 (${un.length}명)</h2>` +
+    (un.length ? un.map(s => `<div class="mrow"><span class="nm">${s.num}번 ${DC.esc(s.name)}</span>${moveSelect(s.id, '')}</div>`).join('') : '<div class="dc-muted">모두 골랐어요.</div>');
+}
+
+function studentInfo(id) {
+  const r = roster[id] || {}, p = picks[id] || {};
+  return { name: r.name || p.name || id, num: r.num || p.num || 0 };
+}
+
+window.moveTo = async function (id, slot) {
+  if (!slot) return;
+  const path = `pick/${ban}/${id}`;
+  if (slot === '__none') await DC.del(path);
+  else await DC.put(path, Object.assign(studentInfo(id), { slot, ts: { '.sv': 'timestamp' }, byTeacher: true }));
+  document.activeElement && document.activeElement.blur();
+  load();
+};
+
+window.toggleOpen = async function () {
+  const next = !conf.open;
+  if (!next && !confirm('고르기를 마감할까요? 학생들은 더 이상 고르거나 옮길 수 없어요.')) return;
+  await DC.put(`pickConfig/${ban}`, Object.assign({}, conf, { open: next, updatedAt: Date.now() }));
+  load();
+};
+
+window.saveCap = async function () {
+  const v = parseInt(document.getElementById('capIn').value, 10);
+  const nc = Object.assign({}, conf, { updatedAt: Date.now() });
+  if (v > 0) nc.cap = v; else delete nc.cap;
+  await DC.put(`pickConfig/${ban}`, nc);
+  document.getElementById('capIn').value = '';
+  load();
+};
+
+window.autoAssign = async function () {
+  const un = banStudents().filter(s => !picks[s.id] || !DC.slot(picks[s.id].slot));
+  if (!un.length) { alert('남은 학생이 없어요.'); return; }
+  if (!confirm(`안 고른 ${un.length}명을 인원이 적은 모둠부터 채워 넣을까요?`)) return;
+  const count = {}; DC.SLOTS.forEach(s => count[s.id] = DC.slotMembers(picks, s.id).length);
+  for (const s of un) {
+    const target = DC.SLOTS.slice().sort((a, b) => count[a.id] - count[b.id])[0].id;
+    count[target]++;
+    await DC.put(`pick/${ban}/${s.id}`, { slot: target, name: s.name, num: s.num, ts: { '.sv': 'timestamp' }, byTeacher: true });
+  }
+  load();
+};
+
+window.resetAll = async function () {
+  if (!confirm(`${DC.banLabel(ban)}의 모둠 편성을 모두 지울까요? (고르기도 닫혀요)`)) return;
+  await DC.del(`pick/${ban}`);
+  await DC.put(`pickConfig/${ban}`, Object.assign({}, conf, { open: false, updatedAt: Date.now() }));
+  load();
+};
+</script>
+</body>
+</html>

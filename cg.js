@@ -21,7 +21,37 @@
   var DC = window.DC = { DB_URL: DB_URL, cfg: null, student: null };
   DC.MEDIA = ['바이브코딩', '신체표현', '젤리활용'];
   DC.MEDIA_ICON = { '바이브코딩': '💻', '신체표현': '🤸', '젤리활용': '🍬' };
-  DC.GROUP_COUNT = 6;
+  DC.DIVS = ['체세포 분열', '생식세포 분열'];
+  DC.DIV_ICON = { '체세포 분열': '🔵', '생식세포 분열': '🟣' };
+  // 모둠 = 매체 × 분열 (3 × 2 = 6). 학생이 선착순으로 고른 칸이 곧 모둠이다.
+  DC.SLOTS = [];
+  [['vibe', '바이브코딩'], ['body', '신체표현'], ['jelly', '젤리활용']].forEach(function (m) {
+    [['mitosis', '체세포 분열'], ['meiosis', '생식세포 분열']].forEach(function (d) {
+      DC.SLOTS.push({ id: m[0] + '-' + d[0], media: m[1], div: d[1], no: DC.SLOTS.length + 1 });
+    });
+  });
+  DC.GROUP_COUNT = DC.SLOTS.length;
+  DC.slot = function (id) { return DC.SLOTS.filter(function (s) { return s.id === id; })[0] || null; };
+  DC.slotLabel = function (id, withNo) {
+    var s = DC.slot(id); if (!s) return '';
+    return (withNo === false ? '' : s.no + '모둠 · ') + DC.MEDIA_ICON[s.media] + ' ' + s.media + ' · ' + DC.DIV_ICON[s.div] + ' ' + s.div;
+  };
+  // 선착순 순서: 서버 시각(ts) → 학번 순. picks = { studentId: {slot, ts, ...} }
+  DC.slotMembers = function (picks, slotId) {
+    return Object.keys(picks || {}).map(function (k) { var p = picks[k]; return p && Object.assign({ id: k }, p); })
+      .filter(function (p) { return p && p.slot === slotId; })
+      .sort(function (a, b) { return (a.ts - b.ts) || String(a.id).localeCompare(String(b.id)); });
+  };
+  // 선착순 설정: pickConfig/{반} = { open, cap } — cap이 없으면 반 인원 ÷ 6 올림
+  DC.loadRosterCount = function (ban) {
+    var p = String(ban).split('-');
+    if (p.length !== 2) return Promise.resolve(0);
+    return fetch(DB_URL + '/years/' + DC.cfg.year + '/students.json').then(function (r) { return r.json(); }).then(function (all) {
+      return Object.keys(all || {}).filter(function (k) { return String(all[k].grade) === p[0] && String(all[k].ban) === p[1]; }).length;
+    }).catch(function () { return 0; });
+  };
+  DC.defaultCap = function (n) { return n ? Math.ceil(n / DC.GROUP_COUNT) : 4; };
+  DC.getMyPick = function () { return DC.get('pick/' + DC.myBan() + '/' + DC.student.id).catch(function () { return null; }); };
 
   // ---------- 유틸 ----------
   DC.esc = function (s) {
@@ -75,8 +105,21 @@
     return realGet(p);
   };
   DC.put = function (p, v) {
-    if (DC.isGuest()) return guestOp(function () { memSet(p, v); return v; });
+    if (DC.isGuest()) return guestOp(function () { // 서버 시각 자리표시자는 체험 모드에서 지금 시각으로
+      v = JSON.parse(JSON.stringify(v), function (k, x) { return x && typeof x === 'object' && x['.sv'] === 'timestamp' ? Date.now() : x; });
+      memSet(p, v); return v;
+    });
     return fetch(DC.url(p), { method: 'PUT', body: JSON.stringify(v) }).then(function (r) { if (!r.ok) throw new Error('저장 실패'); return r.json(); });
+  };
+  // 실시간 감시: Firebase REST 스트리밍(EventSource). 경로 아래가 바뀌면 곧바로 onChange()를 부른다.
+  // 연결이 끊기면 브라우저가 알아서 다시 붙고, 지원하지 않는 환경이면 null을 돌려준다(그땐 폴링만 쓰면 됨).
+  DC.listen = function (p, onChange) {
+    if (!window.EventSource) return null;
+    var es = new EventSource(DC.url(p)), t = null;
+    var fire = function () { clearTimeout(t); t = setTimeout(onChange, 150); };
+    es.addEventListener('put', fire);
+    es.addEventListener('patch', fire);
+    return es;
   };
   DC.del = function (p) {
     if (DC.isGuest()) return guestOp(function () { memSet(p, null); return null; });

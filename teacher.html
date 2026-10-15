@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>교사용 채점 — 세포분열과 유전 표현하기</title>
-<link rel="stylesheet" href="common.css?v=1">
+<link rel="stylesheet" href="common.css?v=2">
 <style>
 .wrap { max-width: 1150px; }
 .step { display: none; } .step.active { display: block; }
@@ -68,6 +68,7 @@ table.grid { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
   </div>
 
   <div class="step" id="step-main">
+    <div class="navlinks" style="font-size:0.82rem;margin-bottom:10px"><a href="teacher.html" style="color:var(--accent);font-weight:700;margin-right:12px">📝 채점 페이지</a><a href="teacher-groups.html" style="color:var(--accent);font-weight:700">🧩 모둠 편성</a></div>
     <div class="toolbar">
       <select id="banSelect" onchange="loadClass()"></select>
       <button class="btn small secondary" onclick="loadClass()">🔄 새로고침</button>
@@ -81,8 +82,8 @@ table.grid { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
 </div>
 <div class="modal-bg" id="modal" onclick="if(event.target===this)closeModal()"><div class="modal" id="modalBody"></div></div>
 
-<script src="session.js?v=1"></script>
-<script src="cg.js?v=1"></script>
+<script src="session.js?v=2"></script>
+<script src="cg.js?v=2"></script>
 <script>
 const PASSWORD = 'byung0703!';
 
@@ -100,7 +101,7 @@ const CRIT = [
     fields: [['counts', '모의 실험 결과'], ['q1', '1. 더 의미 있는 결과와 그 이유'], ['q2', '2. 어버이 순종 교배 설명'], ['q3', '3. 어버이 순종 교배로 추측할 수 있는 것'], ['q4', '4. 자손 1대 잡종 교배 설명(정수비 포함)'], ['q5', '5. 자손 2대 정수비의 의미']] },
   { id: 'media', label: '매체 활용의 적절성 설명하기', short: '매체 활용', max: 2, src: 'essay',
     rubric: [['', [[2, '매체가 분열 과정 설명에 적절한 이유를 과학적으로 제시 + 모형과 실제 세포 분열의 차이점(한계점)을 명확히 설명'], [1, '매체 선택 이유는 제시했으나 실제 현상과의 차이점 설명이 부족·추상적'], [0, '매체 활용 설명이나 실제 현상과의 비교 분석이 거의 없음']]]],
-    fields: [['myMedia', '우리 모둠 매체'], ['q1Why', '① 매체가 적절한 이유'], ['q1Limit', '② 실제 현상과의 차이점(한계점)']] },
+    fields: [['mySlot', '우리 모둠'], ['q1Why', '① 매체가 적절한 이유'], ['q1Limit', '② 실제 현상과의 차이점(한계점)']] },
   { id: 'mitosis', label: '세포분열 과정 표현 — 체세포 분열', short: '체세포', max: 2, src: 'essay',
     rubric: [['', [[2, '각 단계(전·중·후·말기)에서 염색체의 복제 및 분리 행동을 과학적 오류 없이 정확하게 표현'], [1, '주요 흐름은 나타나나 일부 단계에서 행동 표현이 불분명']]]],
     fields: [['otherMedia', '문항 2에서 고른 매체'], ['q2Mitosis', '체세포 분열 표현']] },
@@ -173,7 +174,7 @@ function total(sc) { return sc ? CRIT.reduce((s, c) => s + (has(sc[c.id]) ? +sc[
 function graded(sc) { return sc ? CRIT.filter(c => has(sc[c.id])).length : 0; }
 
 function renderGrid() {
-  let h = '<tr><th>번호</th><th>이름</th><th>판다<br>제출</th><th>논술<br>제출</th><th>매체<small>모둠 → 문항2</small></th>' +
+  let h = '<tr><th>번호</th><th>이름</th><th>판다<br>제출</th><th>논술<br>제출</th><th>모둠<small>매체·분열 → 문항2</small></th>' +
     CRIT.map(c => `<th>${c.short}<small>/${c.max}</small></th>`).join('') + `<th>합계<small>/${MAX_TOTAL}</small></th><th>메모</th></tr>`;
   list.forEach((s, i) => {
     const p = panda[s.id], e = essay[s.id], sc = scores[s.id];
@@ -181,7 +182,7 @@ function renderGrid() {
     h += `<tr class="stu" onclick="openStu(${i})"><td>${s.num || ''}</td><td class="name">${DC.esc(s.name)}</td>` +
       (p ? `<td class="done" title="${DC.fmtTime(p.updatedAt)}">✓</td>` : '<td class="miss">·</td>') +
       (e ? `<td class="done" title="${DC.fmtTime(e.updatedAt)}">✓</td>` : '<td class="miss">·</td>') +
-      `<td>${e ? `${DC.MEDIA_ICON[ea.myMedia] || ''}→${DC.MEDIA_ICON[ea.otherMedia] || ''}` : ''}</td>` +
+      `<td title="${DC.escAttr(DC.slotLabel(ea.mySlot))}">${e ? `${DC.MEDIA_ICON[ea.myMedia] || ''}${DC.DIV_ICON[ea.myDivision] || ''}→${DC.MEDIA_ICON[ea.otherMedia] || ''}` : ''}</td>` +
       CRIT.map(c => sc && has(sc[c.id]) ? `<td class="sc">${sc[c.id]}</td>` : '<td class="sc empty">-</td>').join('') +
       `<td class="total">${graded(sc) ? total(sc) : ''}</td><td class="memo">${sc && sc.memo ? DC.esc(sc.memo) : ''}</td></tr>`;
   });
@@ -212,9 +213,9 @@ window.openStu = function (i) {
     `<button class="btn small secondary" onclick="closeModal()">닫기</button></div>`;
   [['panda', '🐼 활동 1 · 판다로 확인하는 멘델의 유전법칙'], ['essay', '🔬 활동 2 · 세포분열 표현하기 개인 논술']].forEach(([src, title]) => {
     const rec = recs[src], a = rec && rec.answers || {};
-    h += `<div class="sec"><h4>${title} ${rec ? `<span class="dc-muted" style="font-weight:400">· 저장 ${DC.fmtTime(rec.updatedAt)}${src === 'panda' && (a.team || a.role) ? ` · ${DC.esc(a.team || '')} ${DC.esc(a.role || '')}` : ''}${src === 'essay' && a.group ? ` · ${DC.esc(a.group)}모둠` : ''}</span>` : '<span style="color:var(--danger)">· 미제출</span>'}</h4>`;
+    h += `<div class="sec"><h4>${title} ${rec ? `<span class="dc-muted" style="font-weight:400">· 저장 ${DC.fmtTime(rec.updatedAt)}${src === 'panda' && (a.team || a.role) ? ` · ${DC.esc(a.team || '')} ${DC.esc(a.role || '')}` : ''}${src === 'essay' && a.mySlot ? ` · ${DC.esc(DC.slotLabel(a.mySlot))}` : ''}</span>` : '<span style="color:var(--danger)">· 미제출</span>'}</h4>`;
     CRIT.filter(c => c.src === src).forEach(c => {
-      h += '<div class="crit"><div class="ans">' + c.fields.map(([f, l]) => `<b>${DC.esc(l)}</b>${ansText(a[f])}`).join('') + '</div>' +
+      h += '<div class="crit"><div class="ans">' + c.fields.map(([f, l]) => `<b>${DC.esc(l)}</b>${ansText(f === 'mySlot' && a[f] ? DC.slotLabel(a[f]) : a[f])}`).join('') + '</div>' +
         `<div class="scorebox"><div class="ttl">${DC.esc(c.label)} <span class="dc-muted">/${c.max}</span></div>` +
         `<div class="pts" data-crit="${c.id}">` + Array.from({ length: c.max + 1 }, (_, p) => `<button class="${has(sc[c.id]) && +sc[c.id] === p ? 'on' : ''}" onclick="setScore('${c.id}',${p})">${p}</button>`).join('') +
         `<button class="clear" onclick="setScore('${c.id}',null)">지우기</button></div>` +
@@ -270,13 +271,13 @@ window.exportCsv = function () {
   const pandaCount = v => v && typeof v === 'object' ? ['g', 'c', 's'].map(k => `${v[k + 'b'] ?? ''}/${v[k + 'r'] ?? ''}`) : ['', '', ''];
   const head = ['학번', '번호', '이름', ...CRIT.map(c => `${c.short}(${c.max})`), `합계(${MAX_TOTAL})`, '메모',
     '판다:모둠', '판다:역할', '모둠 검정/갈색', '반 검정/갈색', '전교 검정/갈색', '판다:1', '판다:2', '판다:3', '판다:4', '판다:5',
-    '논술:모둠', '모둠 매체', '1-①적절한 이유', '1-②한계점', '문항2 매체', '2-①체세포', '2-②감수', '3.비교·분석'];
+    '논술:모둠', '모둠 매체', '모둠 분열', '1-①적절한 이유', '1-②한계점', '문항2 매체', '2-①체세포', '2-②감수', '3.비교·분석'];
   const lines = [head.map(q).join(',')];
   list.forEach(s => {
     const sc = scores[s.id] || {}, pa = (panda[s.id] || {}).answers || {}, ea = (essay[s.id] || {}).answers || {};
     lines.push([s.id, s.num, s.name, ...CRIT.map(c => sc[c.id]), graded(sc) ? total(sc) : '', sc.memo,
       pa.team, pa.role, ...pandaCount(pa.counts), pa.q1, pa.q2, pa.q3, pa.q4, pa.q5,
-      ea.group, ea.myMedia, ea.q1Why, ea.q1Limit, ea.otherMedia, ea.q2Mitosis, ea.q2Meiosis, ea.q3].map(q).join(','));
+      DC.slot(ea.mySlot) ? DC.slot(ea.mySlot).no + '모둠' : '', ea.myMedia, ea.myDivision, ea.q1Why, ea.q1Limit, ea.otherMedia, ea.q2Mitosis, ea.q2Meiosis, ea.q3].map(q).join(','));
   });
   const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
