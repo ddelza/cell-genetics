@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>교사용 채점 — 세포분열과 유전 표현하기</title>
-<link rel="stylesheet" href="common.css?v=2">
+<link rel="stylesheet" href="common.css?v=4">
 <style>
 .wrap { max-width: 1150px; }
 .step { display: none; } .step.active { display: block; }
@@ -82,8 +82,8 @@ table.grid { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
 </div>
 <div class="modal-bg" id="modal" onclick="if(event.target===this)closeModal()"><div class="modal" id="modalBody"></div></div>
 
-<script src="session.js?v=2"></script>
-<script src="cg.js?v=2"></script>
+<script src="session.js?v=4"></script>
+<script src="cg.js?v=4"></script>
 <script>
 const PASSWORD = 'byung0703!';
 
@@ -197,7 +197,7 @@ function ansText(v) {
   if (!has(v) || (typeof v === 'object' && !Object.keys(v).length)) return '<div class="none">(빈칸)</div>';
   if (typeof v === 'object') { // 판다 결과표
     const r = (b, w) => has(b) && has(w) && +w ? ` → ${(b / w).toFixed(2)}` : '';
-    return '<div>' + [['g', '우리 모둠'], ['c', '반 전체'], ['s', '전교']].filter(([k]) => has(v[k + 'b']) || has(v[k + 'r']))
+    return '<div>' + [['g', '우리 모둠'], ['c', '반 전체' + (v.cn ? ` (${v.cn}개 모둠)` : '')], ['s', '전교' + (v.sn ? ` (${v.sn}개 모둠)` : '')]].filter(([k]) => has(v[k + 'b']) || has(v[k + 'r']))
       .map(([k, l]) => `${l}: 검정 ${v[k + 'b'] ?? '-'} / 갈색 ${v[k + 'r'] ?? '-'}${r(v[k + 'b'], v[k + 'r'])}`).join('\n') + '</div>';
   }
   return '<div>' + DC.esc(v) + '</div>';
@@ -213,7 +213,7 @@ window.openStu = function (i) {
     `<button class="btn small secondary" onclick="closeModal()">닫기</button></div>`;
   [['panda', '🐼 활동 1 · 판다로 확인하는 멘델의 유전법칙'], ['essay', '🔬 활동 2 · 세포분열 표현하기 개인 논술']].forEach(([src, title]) => {
     const rec = recs[src], a = rec && rec.answers || {};
-    h += `<div class="sec"><h4>${title} ${rec ? `<span class="dc-muted" style="font-weight:400">· 저장 ${DC.fmtTime(rec.updatedAt)}${src === 'panda' && (a.team || a.role) ? ` · ${DC.esc(a.team || '')} ${DC.esc(a.role || '')}` : ''}${src === 'essay' && a.mySlot ? ` · ${DC.esc(DC.slotLabel(a.mySlot))}` : ''}</span>` : '<span style="color:var(--danger)">· 미제출</span>'}</h4>`;
+    h += `<div class="sec"><h4>${title} ${rec ? `<span class="dc-muted" style="font-weight:400">· 저장 ${DC.fmtTime(rec.updatedAt)}${src === 'panda' && (a.team || a.role) ? ` · ${a.team ? DC.esc(a.team) + '모둠' : ''} ${DC.esc([].concat(a.role || []).join(', '))}` : ''}${src === 'essay' && a.mySlot ? ` · ${DC.esc(DC.slotLabel(a.mySlot))}` : ''}</span>` : '<span style="color:var(--danger)">· 미제출</span>'}</h4>`;
     CRIT.filter(c => c.src === src).forEach(c => {
       h += '<div class="crit"><div class="ans">' + c.fields.map(([f, l]) => `<b>${DC.esc(l)}</b>${ansText(f === 'mySlot' && a[f] ? DC.slotLabel(a[f]) : a[f])}`).join('') + '</div>' +
         `<div class="scorebox"><div class="ttl">${DC.esc(c.label)} <span class="dc-muted">/${c.max}</span></div>` +
@@ -276,7 +276,7 @@ window.exportCsv = function () {
   list.forEach(s => {
     const sc = scores[s.id] || {}, pa = (panda[s.id] || {}).answers || {}, ea = (essay[s.id] || {}).answers || {};
     lines.push([s.id, s.num, s.name, ...CRIT.map(c => sc[c.id]), graded(sc) ? total(sc) : '', sc.memo,
-      pa.team, pa.role, ...pandaCount(pa.counts), pa.q1, pa.q2, pa.q3, pa.q4, pa.q5,
+      pa.team, [].concat(pa.role || []).join(', '), ...pandaCount(pa.counts), pa.q1, pa.q2, pa.q3, pa.q4, pa.q5,
       DC.slot(ea.mySlot) ? DC.slot(ea.mySlot).no + '모둠' : '', ea.myMedia, ea.myDivision, ea.q1Why, ea.q1Limit, ea.otherMedia, ea.q2Mitosis, ea.q2Meiosis, ea.q3].map(q).join(','));
   });
   const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });

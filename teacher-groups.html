@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>교사용 모둠 편성 — 세포분열과 유전 표현하기</title>
-<link rel="stylesheet" href="common.css?v=2">
+<link rel="stylesheet" href="common.css?v=4">
 <style>
 .wrap { max-width: 1150px; }
 .step { display: none; } .step.active { display: block; }
@@ -30,11 +30,17 @@
 .mrow .t { color: var(--text-muted); font-size: 0.7rem; }
 .mrow select { font-size: 0.74rem; padding: 3px; border-radius: 6px; border: 1px solid var(--border); max-width: 130px; }
 .unassigned { margin-top: 14px; }
+.tabs2 { display: flex; gap: 8px; margin: 4px 0 14px; }
+.tabs2 button { flex: 1; padding: 11px; border-radius: 12px; border: 2px solid var(--border); background: var(--surface); font-weight: 800; font-size: 0.92rem; cursor: pointer; font-family: inherit; color: var(--text-muted); }
+.tabs2 button.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.sec { display: none; } .sec.on { display: block; }
+.pres { font-size: 0.74rem; color: #555; background: #f6f8fa; border-radius: 8px; padding: 4px 8px; margin: 4px 0 6px; display: flex; justify-content: space-between; gap: 6px; align-items: center; }
+.pres button { border: none; background: none; color: var(--danger); font-size: 0.7rem; cursor: pointer; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="header"><h1>🧩 세포분열 표현하기 · 모둠 편성 (교사용)</h1><p id="semLabel"></p></div>
+  <div class="header"><h1>🧩 모둠 편성 (교사용)</h1><p id="semLabel"></p></div>
 
   <div class="step active" id="step-pw">
     <div class="card" style="max-width:420px;margin:0 auto">
@@ -49,6 +55,24 @@
     <div class="navlinks"><a href="teacher.html">📝 채점 페이지</a><a href="teacher-groups.html">🧩 모둠 편성</a></div>
     <div class="toolbar">
       <select id="banSelect" onchange="changeBan()"></select>
+      <span class="dc-muted" id="loadInfo"></span>
+    </div>
+    <div class="tabs2"><button data-tab="panda" onclick="setTab('panda')">🐼 판다 활동 모둠</button><button data-tab="div" onclick="setTab('div')">🧩 세포분열 모둠 (선착순)</button></div>
+
+    <div class="sec" id="sec-panda">
+      <div class="toolbar">
+        <span style="font-size:0.85rem">모둠 수</span><input type="number" id="pCountIn" min="1" max="12"><button class="btn small secondary" onclick="savePCount()">저장</button>
+        <button class="btn small secondary" onclick="splitP('num')">🔢 번호순으로 나누기</button>
+        <button class="btn small secondary" onclick="splitP('random')">🎲 무작위로 나누기</button>
+        <button class="btn small danger-outline" onclick="resetP()">🗑 판다 모둠 초기화</button>
+      </div>
+      <p class="hint">학생 옆 목록으로 모둠을 자유롭게 옮길 수 있어요. 배정하면 학생 판다 페이지에 바로 반영되고, 모둠 결과(검정·갈색)는 모둠원 한 명만 입력하면 공유돼요. 잘못 입력된 결과는 "결과 지우기"로 지울 수 있어요.</p>
+      <div class="groups" id="pGroups"></div>
+      <div class="card unassigned" id="pUnassigned"></div>
+    </div>
+
+    <div class="sec" id="sec-div">
+    <div class="toolbar">
       <span class="state" id="stateTag"></span>
       <button class="btn big" id="toggleBtn" onclick="toggleOpen()"></button>
     </div>
@@ -57,19 +81,21 @@
       <span class="dc-muted" id="capInfo"></span>
       <button class="btn small secondary" onclick="autoAssign()">🎲 남은 학생 자동 배정</button>
       <button class="btn small danger-outline" onclick="resetAll()">🗑 이 반 편성 초기화</button>
-      <span class="dc-muted" id="loadInfo"></span>
     </div>
     <p class="hint">"▶ 고르기 시작"을 누르면 <b>학생 화면에 새로고침 없이 즉시</b> 선착순이 열려요(실시간 연결). 학생들은 미리 "매체·분열 고르기" 화면을 열어 두고 기다리게 하세요. 각 학생 옆 목록으로 모둠을 옮길 수 있어요(교사 이동은 정원 제한 없음).</p>
     <div class="groups" id="groups"></div>
     <div class="card unassigned" id="unassigned"></div>
+    </div>
   </div>
 </div>
 
-<script src="session.js?v=2"></script>
-<script src="cg.js?v=2"></script>
+<script src="session.js?v=4"></script>
+<script src="cg.js?v=4"></script>
 <script>
 const PASSWORD = 'byung0703!';
 let roster = {}, ban = '', conf = {}, picks = {}, rosterN = 0;
+let pteam = {}, pconf = {}, presult = {};
+const pcount = () => pconf.count || 6;
 
 window.checkPw = function () {
   if (document.getElementById('pwInput').value !== PASSWORD) {
@@ -95,6 +121,14 @@ async function init() {
   changeBan();
   setInterval(() => { if (!document.hidden && !typing()) load(); }, 10000);
 }
+// 실시간 감시는 지금 보고 있는 탭의 반 데이터만 (브라우저 동시 연결 수 제한 때문에 스트림은 최대 2개)
+let curTab = 'panda';
+function restream() {
+  streams.forEach(s => s && s.close());
+  if (!ban) { streams = []; return; }
+  const onChange = () => { if (!typing()) load(); };
+  streams = (curTab === 'panda' ? ['pandaTeam', 'pandaResult'] : ['pick']).map(k => DC.listen(`${k}/${ban}`, onChange));
+}
 const typing = () => document.activeElement && ['SELECT', 'INPUT'].includes(document.activeElement.tagName);
 let streams = [];
 
@@ -108,17 +142,16 @@ window.changeBan = async function () {
   ban = document.getElementById('banSelect').value;
   rosterN = banStudents().length;
   document.getElementById('capIn').value = '';
-  // 반을 바꾸면 그 반 데이터만 실시간 감시
-  streams.forEach(s => s && s.close());
-  const onChange = () => { if (!typing()) load(); };
-  streams = [DC.listen(`pick/${ban}`, onChange), DC.listen(`pickConfig/${ban}`, onChange)];
+  restream();
   await load();
 };
 
 async function load() {
-  const [c, p] = await Promise.all([DC.get(`pickConfig/${ban}`).catch(() => null), DC.get(`pick/${ban}`).catch(() => null)]);
-  conf = c || {}; picks = p || {};
-  paint();
+  const [p, pt, pc, pr] = await Promise.all(['pick', 'pandaTeam', 'pandaTeamConfig', 'pandaResult'].map(k => DC.get(`${k}/${ban}`).catch(() => null)));
+  picks = p || {}; conf = picks._config || {}; delete picks._config;
+  pteam = pt || {}; pconf = pc || {}; presult = pr || {};
+  if (Array.isArray(presult)) presult = Object.assign({}, presult); // 모둠 번호 키가 숫자라 배열로 올 수 있음
+  paint(); paintPanda();
   document.getElementById('loadInfo').textContent = `갱신 ${new Date().toLocaleTimeString()}`;
 }
 const cap = () => conf.cap || DC.defaultCap(rosterN);
@@ -150,10 +183,84 @@ function paint() {
     (un.length ? un.map(s => `<div class="mrow"><span class="nm">${s.num}번 ${DC.esc(s.name)}</span>${moveSelect(s.id, '')}</div>`).join('') : '<div class="dc-muted">모두 골랐어요.</div>');
 }
 
-function studentInfo(id) {
-  const r = roster[id] || {}, p = picks[id] || {};
+function studentInfo(id, src) {
+  const r = roster[id] || {}, p = (src || picks)[id] || {};
   return { name: r.name || p.name || id, num: r.num || p.num || 0 };
 }
+
+
+// ---------- 판다 활동 모둠 (교사가 직접 편성) ----------
+// pandaTeam/{반}/{학번} = { group, name, num }, pandaTeamConfig/{반} = { count }, pandaResult/{반}/{모둠} = { black, brown, ... }
+window.setTab = function (t) {
+  document.querySelectorAll('.tabs2 button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  document.querySelectorAll('.sec').forEach(x => x.classList.toggle('on', x.id === 'sec-' + t));
+  try { localStorage.setItem('cgTeacherTab', t); } catch (e) {}
+  if (curTab !== t) { curTab = t; restream(); }
+};
+(function () { let t = 'panda'; try { t = localStorage.getItem('cgTeacherTab') || 'panda'; } catch (e) {} setTab(t); })();
+
+function pSelect(id, cur) {
+  let o = `<select onchange="moveP('${DC.escAttr(id)}', this.value)"><option value="">${cur ? '옮기기…' : '배정…'}</option>`;
+  for (let g = 1; g <= pcount(); g++) if (g !== cur) o += `<option value="${g}">${g}모둠</option>`;
+  return o + (cur ? '<option value="__none">배정 해제</option>' : '') + '</select>';
+}
+
+function paintPanda() {
+  const inp = document.getElementById('pCountIn');
+  if (document.activeElement !== inp) inp.value = pcount();
+  const members = g => Object.entries(pteam).filter(([, x]) => x && +x.group === g).map(([id, x]) => Object.assign({ id }, x)).sort((a, b) => (a.num || 0) - (b.num || 0));
+  const maxG = Math.max(pcount(), ...Object.values(pteam).map(x => +(x && x.group) || 0));
+  let h = '';
+  for (let g = 1; g <= maxG; g++) {
+    const mem = members(g), r = presult[g];
+    h += `<div class="gbox"><h4><span>🐼 ${g}모둠${g > pcount() ? ' <span class="dc-muted">(모둠 수 밖)</span>' : ''}</span><span class="cnt">${mem.length}명</span></h4>` +
+      (r ? `<div class="pres"><span>결과: 검정 <b>${DC.esc(r.black)}</b> / 갈색 <b>${DC.esc(r.brown)}</b> · ${DC.esc(r.lastEditorName || '')} ${DC.fmtTime(r.updatedAt)}</span><button onclick="clearPResult(${g})">결과 지우기</button></div>` : '<div class="pres"><span class="dc-muted">결과 미입력</span></div>') +
+      (mem.map(m => `<div class="mrow"><span class="nm">${m.num ? m.num + '번 ' : ''}${DC.esc(m.name)}</span>${pSelect(m.id, g)}</div>`).join('') || '<div class="dc-muted" style="font-size:0.8rem">아직 없음</div>') + '</div>';
+  }
+  document.getElementById('pGroups').innerHTML = h;
+  const un = banStudents().filter(s => !pteam[s.id] || !pteam[s.id].group);
+  document.getElementById('pUnassigned').innerHTML = `<h2>판다 모둠 미배정 (${un.length}명)</h2>` +
+    (un.length ? un.map(s => `<div class="mrow"><span class="nm">${s.num}번 ${DC.esc(s.name)}</span>${pSelect(s.id, 0)}</div>`).join('') : '<div class="dc-muted">모두 배정했어요.</div>');
+}
+
+window.moveP = async function (id, g) {
+  if (!g) return;
+  const path = `pandaTeam/${ban}/${id}`;
+  if (g === '__none') await DC.del(path);
+  else await DC.put(path, Object.assign(studentInfo(id, pteam), { group: +g }));
+  document.activeElement && document.activeElement.blur();
+  load();
+};
+window.savePCount = async function () {
+  const v = parseInt(document.getElementById('pCountIn').value, 10);
+  if (!(v > 0 && v <= 12)) { alert('모둠 수는 1~12 사이로 적어 주세요.'); return; }
+  await DC.put(`pandaTeamConfig/${ban}`, { count: v, updatedAt: Date.now() });
+  document.activeElement && document.activeElement.blur();
+  load();
+};
+window.splitP = async function (mode) {
+  const st = banStudents();
+  if (!st.length) { alert('이 반 명단이 없어요.'); return; }
+  const k = pcount();
+  if (Object.keys(pteam).length && !confirm(`지금 판다 모둠 편성을 지우고 ${st.length}명을 ${k}개 모둠으로 ${mode === 'num' ? '번호순으로' : '무작위로'} 다시 나눌까요?`)) return;
+  let order = st.slice();
+  if (mode === 'random') for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+  const out = {};
+  order.forEach((s, i) => { out[s.id] = { group: mode === 'num' ? Math.floor(i * k / order.length) + 1 : (i % k) + 1, name: s.name, num: s.num }; });
+  await DC.put(`pandaTeam/${ban}`, out);
+  load();
+};
+window.resetP = async function () {
+  if (!confirm(`${DC.banLabel(ban)}의 판다 모둠 편성을 모두 지울까요? (입력된 모둠 결과는 남아요)`)) return;
+  await DC.del(`pandaTeam/${ban}`);
+  load();
+};
+window.clearPResult = async function (g) {
+  const r = presult[g];
+  if (!confirm(`${g}모둠 결과(검정 ${r.black} / 갈색 ${r.brown})를 지울까요? 반 전체·전교 합계에서도 빠져요.`)) return;
+  await DC.del(`pandaResult/${ban}/${g}`);
+  load();
+};
 
 window.moveTo = async function (id, slot) {
   if (!slot) return;
@@ -167,7 +274,7 @@ window.moveTo = async function (id, slot) {
 window.toggleOpen = async function () {
   const next = !conf.open;
   if (!next && !confirm('고르기를 마감할까요? 학생들은 더 이상 고르거나 옮길 수 없어요.')) return;
-  await DC.put(`pickConfig/${ban}`, Object.assign({}, conf, { open: next, updatedAt: Date.now() }));
+  await DC.put(`pick/${ban}/_config`, Object.assign({}, conf, { open: next, updatedAt: Date.now() }));
   load();
 };
 
@@ -175,7 +282,7 @@ window.saveCap = async function () {
   const v = parseInt(document.getElementById('capIn').value, 10);
   const nc = Object.assign({}, conf, { updatedAt: Date.now() });
   if (v > 0) nc.cap = v; else delete nc.cap;
-  await DC.put(`pickConfig/${ban}`, nc);
+  await DC.put(`pick/${ban}/_config`, nc);
   document.getElementById('capIn').value = '';
   load();
 };
@@ -196,7 +303,7 @@ window.autoAssign = async function () {
 window.resetAll = async function () {
   if (!confirm(`${DC.banLabel(ban)}의 모둠 편성을 모두 지울까요? (고르기도 닫혀요)`)) return;
   await DC.del(`pick/${ban}`);
-  await DC.put(`pickConfig/${ban}`, Object.assign({}, conf, { open: false, updatedAt: Date.now() }));
+  await DC.put(`pick/${ban}/_config`, Object.assign({}, conf, { open: false, updatedAt: Date.now() }));
   load();
 };
 </script>

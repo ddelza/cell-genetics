@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>판다로 확인하는 멘델의 유전법칙 — 세포분열과 유전 표현하기</title>
-<link rel="stylesheet" href="common.css?v=2">
+<link rel="stylesheet" href="common.css?v=4">
 <style>
 .floor { display: grid; grid-template-columns: 64px 1fr; gap: 4px 10px; font-size: 0.82rem; line-height: 1.55; margin: 8px 0; }
 .floor b { color: var(--accent); }
@@ -17,8 +17,8 @@
   <div id="form"></div>
 </div>
 
-<script src="session.js?v=2"></script>
-<script src="cg.js?v=2"></script>
+<script src="session.js?v=4"></script>
+<script src="cg.js?v=4"></script>
 <script>
 const GAME = '<div class="concept"><h3>🐼 판다의 유전 (마인크래프트) 다시 보기</h3>' +
   '<div class="floor">' +
@@ -34,27 +34,114 @@ function ratioText(b, r) {
   if (r === 0) return b > 0 ? '갈색 0' : '-';
   return (b / r).toFixed(2) + ' (약 ' + (Math.round(b / r * 10) / 10) + ' : 1)';
 }
-const ROWS = [['g', '우리 모둠'], ['c', '반 전체'], ['s', '전교 <span class="dc-muted">(알면)</span>']];
-const COUNTS = {
-  id: 'counts', type: 'custom', short: '모의 실험 결과',
-  label: '모의 실험 결과 (자손 2대 아기 판다 수)',
-  hint: '잘못 분류된 판다도 색을 잘 보고 포함해서 센 결과를 적어요. 반 전체 결과는 선생님이 알려 줘요.',
-  render: (val, name) => {
-    val = val || {};
-    return '<table class="cg-table" id="' + name + '"><tr><th></th><th>검정</th><th>갈색</th><th>검정 ÷ 갈색</th></tr>' +
-      ROWS.map(([k, lab]) => '<tr><th>' + lab + '</th>' +
-        '<td><input type="number" min="0" inputmode="numeric" data-c="' + k + 'b" value="' + DC.escAttr(val[k + 'b'] ?? '') + '"></td>' +
-        '<td><input type="number" min="0" inputmode="numeric" data-c="' + k + 'r" value="' + DC.escAttr(val[k + 'r'] ?? '') + '"></td>' +
-        '<td class="ratio" data-ratio="' + k + '">' + ratioText(val[k + 'b'], val[k + 'r']) + '</td></tr>').join('') + '</table>';
-  },
-  read: (root, name) => {
-    const out = {};
-    root.querySelectorAll('#' + name + ' input[data-c]').forEach(el => { if (el.value !== '') out[el.dataset.c] = +el.value; });
-    return out;
-  },
-  text: v => ROWS.filter(([k]) => N(v[k + 'b']) !== null || N(v[k + 'r']) !== null)
-    .map(([k, lab]) => lab.replace(/<[^>]+>/g, '').replace(' (알면)', '') + ': 검정 ' + (v[k + 'b'] ?? '-') + ' / 갈색 ' + (v[k + 'r'] ?? '-') + ' → ' + ratioText(v[k + 'b'], v[k + 'r'])).join('\n'),
-};
+
+// ---------- 모의 실험 결과표 ----------
+// 우리 모둠 결과는 모둠원 한 명만 입력하면 공유된다: pandaResult/{반}/{모둠} = { black, brown, lastEditorName, updatedAt }
+// 반 전체·전교는 지금까지 입력된 모둠 결과를 자동으로 더한다. 모둠 배정은 교사가 한다: pandaTeam/{반}/{학번} = { group }
+const R = { ban: '', team: null, members: [], all: {}, loadedAt: 0, ready: false };
+const RESULT_BOX = '<label class="field-label">모의 실험 결과 (자손 2대 아기 판다 수)</label>' +
+  '<div class="dc-hint">잘못 분류된 판다도 색을 잘 보고 포함해서 센 결과를 적어요. <b>우리 모둠 결과는 모둠에서 한 명만 입력</b>하면 모둠원 모두에게 공유되고, 반 전체·전교는 입력된 결과가 자동으로 합산돼요.</div>' +
+  '<div id="resultBox"><div class="loading-state">불러오는 중...</div></div>';
+
+function sumOf(groups) {
+  let b = 0, r = 0, n = 0;
+  Object.values(groups || {}).forEach(x => { if (x && N(x.black) !== null && N(x.brown) !== null) { b += +x.black; r += +x.brown; n++; } });
+  return { b, r, n };
+}
+function totals() {
+  const all = R.all || {};
+  const cls = sumOf(all[R.ban]);
+  // 전교: 실제 반만 합산(교사 테스트 반 'T'는 테스트 중일 때만 포함)
+  const bans = Object.keys(all).filter(k => k !== 'T' || R.ban === 'T');
+  let b = 0, r = 0, n = 0, nb = 0;
+  bans.forEach(k => { const t = sumOf(all[k]); if (t.n) { b += t.b; r += t.r; n += t.n; nb++; } });
+  return { cls, school: { b, r, n, nb } };
+}
+const mine = () => R.team && R.all[R.ban] ? R.all[R.ban][R.team] : null;
+
+function renderResultTable() {
+  const box = document.getElementById('resultBox'); if (!box) return;
+  const dis = R.team ? '' : ' disabled';
+  box.innerHTML = '<table class="cg-table"><tr><th></th><th>검정</th><th>갈색</th><th>검정 ÷ 갈색</th></tr>' +
+    '<tr><th>우리 모둠<small id="rgNote"></small></th>' +
+    `<td><input type="number" min="0" inputmode="numeric" id="rgB"${dis}></td><td><input type="number" min="0" inputmode="numeric" id="rgR"${dis}></td><td class="ratio" id="rgRatio">-</td></tr>` +
+    '<tr><th>반 전체<small id="rcNote"></small></th><td id="rcB">-</td><td id="rcR">-</td><td class="ratio" id="rcRatio">-</td></tr>' +
+    '<tr><th>전교<small id="rsNote"></small></th><td id="rsB">-</td><td id="rsR">-</td><td class="ratio" id="rsRatio">-</td></tr></table>' +
+    (R.team ? '<div class="error-msg" id="rgErr"></div><div class="ok-msg" id="rgOk"></div><button class="btn small" id="rgSave" style="margin-top:8px">💾 우리 모둠 결과 저장 (모둠원 모두에게 공유)</button>'
+      : '<div class="dc-locked" style="margin-top:8px">선생님이 아직 판다 모둠을 배정하지 않았어요. 배정되면 우리 모둠 결과를 입력할 수 있어요.</div>');
+  ['rgB', 'rgR'].forEach(id => document.getElementById(id).addEventListener('input', () => {
+    document.getElementById('rgRatio').textContent = ratioText(document.getElementById('rgB').value, document.getElementById('rgR').value);
+  }));
+  if (R.team) document.getElementById('rgSave').onclick = saveTeamResult;
+  syncInputs(true);
+  refreshTotals();
+}
+
+// 서버 값을 입력칸에 반영 — 학생이 고치는 중인 칸(서버 값과 다르게 바꾼 칸)은 건드리지 않는다.
+function syncInputs(force) {
+  const m = mine() || {};
+  [['rgB', m.black], ['rgR', m.brown]].forEach(([id, v]) => {
+    const el = document.getElementById(id); if (!el) return;
+    const sv = v === undefined || v === null ? '' : String(v);
+    if (force || (el.value === (el.dataset.server ?? '') && document.activeElement !== el)) el.value = sv;
+    el.dataset.server = sv;
+  });
+  const g = document.getElementById('rgB');
+  if (g) document.getElementById('rgRatio').textContent = ratioText(g.value, document.getElementById('rgR').value);
+}
+function refreshTotals() {
+  if (!document.getElementById('rcB')) return;
+  const m = mine();
+  document.getElementById('rgNote').innerHTML = R.team
+    ? `${R.team}모둠 · ${m ? `${DC.esc(m.lastEditorName || '')} 입력 ${DC.fmtTime(m.updatedAt)}` : '아직 입력 전'}` + (R.members.length ? `<br>${DC.esc(R.members.join(', '))}` : '')
+    : '모둠 배정 전';
+  const t = totals();
+  [['c', t.cls, `${t.cls.n}개 모둠 합계`], ['s', t.school, `${t.school.nb}개 반 · ${t.school.n}개 모둠 합계`]].forEach(([k, v, note]) => {
+    document.getElementById(`r${k}B`).textContent = v.n ? v.b : '-';
+    document.getElementById(`r${k}R`).textContent = v.n ? v.r : '-';
+    document.getElementById(`r${k}Ratio`).textContent = v.n ? ratioText(v.b, v.r) : '-';
+    document.getElementById(`r${k}Note`).textContent = v.n ? `지금까지 ${note}` : '아직 입력된 모둠 없음';
+  });
+}
+
+async function saveTeamResult() {
+  const err = document.getElementById('rgErr'), ok = document.getElementById('rgOk');
+  err.classList.remove('show'); ok.classList.remove('show');
+  const b = N(document.getElementById('rgB').value), r = N(document.getElementById('rgR').value);
+  if (b === null || r === null || b < 0 || r < 0) { err.textContent = '검정·갈색 판다 수를 모두 0 이상의 숫자로 적어 주세요.'; err.classList.add('show'); return; }
+  const btn = document.getElementById('rgSave');
+  btn.disabled = true;
+  try {
+    const path = `pandaResult/${R.ban}/${R.team}`;
+    const cur = await DC.get(path).catch(() => null);
+    if (cur && cur.updatedAt && cur.updatedAt !== R.loadedAt && (cur.black !== b || cur.brown !== r) &&
+      !confirm(`그 사이 ${cur.lastEditorName || '다른 모둠원'}이(가) 우리 모둠 결과를 검정 ${cur.black} / 갈색 ${cur.brown}(으)로 저장했어요.\n내가 쓴 검정 ${b} / 갈색 ${r}(으)로 바꿀까요?`)) {
+      await loadResults(true); return;
+    }
+    const rec = { black: b, brown: r, lastEditor: DC.student.id, lastEditorName: DC.student.name, updatedAt: Date.now() };
+    await DC.put(path, rec);
+    R.all[R.ban] = R.all[R.ban] || {}; R.all[R.ban][R.team] = rec; R.loadedAt = rec.updatedAt;
+    syncInputs(true); refreshTotals();
+    ok.textContent = '저장되었어요! 모둠원 화면에도 바로 보여요.'; ok.classList.add('show');
+  } catch (e) {
+    err.textContent = e.message + ' — 다시 눌러 주세요.'; err.classList.add('show');
+  } finally { btn.disabled = false; }
+}
+
+async function loadTeam() {
+  const t = (await DC.get(`pandaTeam/${R.ban}`).catch(() => null)) || {};
+  const my = t[DC.student.id];
+  const team = my && my.group ? +my.group : null;
+  R.members = team ? Object.values(t).filter(x => x && +x.group === team).sort((a, b) => (a.num || 0) - (b.num || 0)).map(x => x.name) : [];
+  const changed = team !== R.team || !R.ready;
+  R.team = team; R.ready = true;
+  if (changed) renderResultTable(); else refreshTotals();
+}
+async function loadResults(force) {
+  R.all = (await DC.get('pandaResult').catch(() => null)) || {};
+  const m = mine(); R.loadedAt = m ? m.updatedAt : 0;
+  syncInputs(force); refreshTotals();
+}
 
 const RUBRIC = [
   ['모의 활동에 유전 법칙 적용하기 (3점)', [
@@ -74,9 +161,8 @@ const RUBRIC_HTML = '<details class="cg-rubric"><summary>📋 평가 기준 보�
 const GROUPS = [
   { title: '① 모의 실험 결과 기록하기', fields: [
     { type: 'info', html: GAME },
-    { id: 'team', type: 'text', short: '모둠', label: '우리 모둠 (번호나 이름)', placeholder: '예) 3모둠' },
-    { id: 'role', type: 'radio', short: '나의 역할', label: '나의 역할', options: ['대장', '판다결혼정보회사직원', '판다유치원교사', '판다양로원직원', '철도공사직원'] },
-    COUNTS,
+    { id: 'role', type: 'checks', short: '나의 역할', label: '나의 역할 (맡은 역할을 모두 골라요)', options: ['대장', '판다결혼정보회사직원', '판다유치원교사', '판다양로원직원', '철도공사직원'] },
+    { type: 'info', html: RESULT_BOX },
   ] },
   { title: '② 유전의 원리 분석·도출하기 (개인 논술 · 9점)', fields: [
     { type: 'info', html: '<div style="font-size:0.82rem;line-height:1.6">모둠 토의 문항이에요. 토의한 내용을 바탕으로 <b>자기 말로</b> 답을 써요. 수치(판다 수, 비율)를 근거로 들면 더 좋아요.</div>' + RUBRIC_HTML },
@@ -89,23 +175,28 @@ const GROUPS = [
 ];
 
 DC.start({ title: '🐼 판다로 확인하는 멘델의 유전법칙', subtitle: '활동 1 · 유전의 원리 분석·도출하기' }).then(() => {
+  R.ban = DC.myBan();
   DC.form({
     mount: '#form', key: 'panda', groups: GROUPS, saveLabel: '💾 저장하기',
     required: ['q1', 'q2', 'q3', 'q4', 'q5'],
     validate: ans => {
-      const c = ans.counts || {};
-      if (N(c.gb) === null || N(c.gr) === null) return '우리 모둠 검정·갈색 판다 수를 적어 주세요.';
-      if (N(c.cb) === null || N(c.cr) === null) return '반 전체 검정·갈색 판다 수를 적어 주세요.';
+      const gb = document.getElementById('rgB'), gr = document.getElementById('rgR');
+      if (gb && (gb.value !== (gb.dataset.server ?? '') || gr.value !== (gr.dataset.server ?? '')))
+        return '우리 모둠 결과에 저장하지 않은 숫자가 있어요. 먼저 "우리 모둠 결과 저장"을 눌러 주세요.';
+      // 채점 참고용으로 저장 당시의 결과표를 함께 남긴다
+      const m = mine() || {}, t = totals();
+      ans.team = R.team || '';
+      ans.counts = { gb: m.black ?? '', gr: m.brown ?? '', cb: t.cls.n ? t.cls.b : '', cr: t.cls.n ? t.cls.r : '', cn: t.cls.n,
+        sb: t.school.n ? t.school.b : '', sr: t.school.n ? t.school.r : '', sn: t.school.n };
       return '';
     },
+    onLoad: () => { loadTeam().then(() => loadResults(true)); },
   });
-  // 결과표 비율 자동 계산
-  document.addEventListener('input', e => {
-    const inp = e.target.closest('.cg-table input[data-c]'); if (!inp) return;
-    const tb = inp.closest('table'), k = inp.dataset.c[0];
-    const b = tb.querySelector('[data-c="' + k + 'b"]').value, r = tb.querySelector('[data-c="' + k + 'r"]').value;
-    tb.querySelector('[data-ratio="' + k + '"]').textContent = ratioText(b, r);
-  });
+  // 모둠원·다른 모둠이 결과를 저장하거나 선생님이 모둠을 배정하면 바로 반영
+  // (실시간 연결은 1개만 — 모둠 배정은 10초마다 확인)
+  const live = DC.listen('pandaResult', () => { loadResults(false); if (R.ready) loadTeam(); });
+  setInterval(() => { if (!document.hidden && R.ready) loadTeam(); }, 10000);
+  setInterval(() => { if (!document.hidden && R.ready) loadResults(false); }, live ? 30000 : 8000);
 });
 </script>
 </body>

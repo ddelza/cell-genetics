@@ -39,10 +39,12 @@
   // 선착순 순서: 서버 시각(ts) → 학번 순. picks = { studentId: {slot, ts, ...} }
   DC.slotMembers = function (picks, slotId) {
     return Object.keys(picks || {}).map(function (k) { var p = picks[k]; return p && Object.assign({ id: k }, p); })
-      .filter(function (p) { return p && p.slot === slotId; })
+      .filter(function (p) { return p && p.id !== '_config' && p.slot === slotId; })
       .sort(function (a, b) { return (a.ts - b.ts) || String(a.id).localeCompare(String(b.id)); });
   };
-  // 선착순 설정: pickConfig/{반} = { open, cap } — cap이 없으면 반 인원 ÷ 6 올림
+  // 선착순 설정: pick/{반}/_config = { open, cap } — cap이 없으면 반 인원 ÷ 6 올림.
+  // 편성 데이터와 같은 경로에 두어서 실시간 연결(EventSource) 하나로 둘 다 감시한다
+  // (브라우저는 같은 서버에 동시 연결을 6개까지만 열어서, 연결이 많으면 다른 요청이 멈춘다).
   DC.loadRosterCount = function (ban) {
     var p = String(ban).split('-');
     if (p.length !== 2) return Promise.resolve(0);
@@ -112,6 +114,7 @@
     return fetch(DC.url(p), { method: 'PUT', body: JSON.stringify(v) }).then(function (r) { if (!r.ok) throw new Error('저장 실패'); return r.json(); });
   };
   // 실시간 감시: Firebase REST 스트리밍(EventSource). 경로 아래가 바뀌면 곧바로 onChange()를 부른다.
+  // ⚠️ 브라우저는 같은 서버에 동시 연결을 6개까지만 연다 — 한 페이지에서 스트림은 1~2개만 쓸 것.
   // 연결이 끊기면 브라우저가 알아서 다시 붙고, 지원하지 않는 환경이면 null을 돌려준다(그땐 폴링만 쓰면 됨).
   DC.listen = function (p, onChange) {
     if (!window.EventSource) return null;
@@ -190,6 +193,13 @@
         h += '<label class="dc-choice"><input type="radio" name="' + name + '"' + data + ' value="' + DC.escAttr(o) + '"' + (String(val) === String(o) ? ' checked' : '') + '><span>' + DC.esc(lab) + '</span></label>';
       });
       h += '</div>';
+    } else if (f.type === 'checks') { // 복수 선택
+      var arr = Array.isArray(val) ? val : (val ? [val] : []);
+      h += '<div class="dc-choices' + (f.cls ? ' ' + f.cls : '') + '">';
+      f.options.forEach(function (o) {
+        h += '<label class="dc-choice"><input type="checkbox" name="' + name + '"' + data + ' value="' + DC.escAttr(o) + '"' + (arr.indexOf(o) >= 0 ? ' checked' : '') + '><span>' + DC.esc(o) + '</span></label>';
+      });
+      h += '</div>';
     } else if (f.type === 'custom') {
       h += f.render(val, name);
     }
@@ -198,6 +208,9 @@
   function readField(formId, f, root) {
     var name = formId + '__' + f.id;
     if (f.type === 'custom') return f.read(root, name);
+    if (f.type === 'checks') {
+      return Array.prototype.map.call(root.querySelectorAll('input[name="' + name + '"]:checked'), function (e) { return e.value; });
+    }
     if (f.type === 'radio') {
       var c = root.querySelector('input[name="' + name + '"]:checked');
       return c ? c.value : '';
@@ -215,6 +228,7 @@
     if (DC.isEmpty(v)) return '';
     if (f.text) return f.text(v);
     if (f.labels && f.labels[v]) return f.labels[v];
+    if (Array.isArray(v)) return v.join(', ');
     if (typeof v === 'object') return JSON.stringify(v);
     return String(v);
   };

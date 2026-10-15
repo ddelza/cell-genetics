@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>매체·분열 고르기 (모둠 편성) — 세포분열과 유전 표현하기</title>
-<link rel="stylesheet" href="common.css?v=2">
+<link rel="stylesheet" href="common.css?v=4">
 <style>
 .wrap { max-width: 720px; }
 .status { border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; font-size: 0.88rem; line-height: 1.6; text-align: center; }
@@ -47,15 +47,15 @@
   <div id="grid"><div class="loading-state">불러오는 중...</div></div>
 </div>
 
-<script src="session.js?v=2"></script>
-<script src="cg.js?v=2"></script>
+<script src="session.js?v=4"></script>
+<script src="cg.js?v=4"></script>
 <script>
 let ban, conf = {}, picks = {}, cap = 4, rosterN = 0, busy = false;
 const me = () => DC.student.id;
 
 async function load() {
-  const [c, p] = await Promise.all([DC.get(`pickConfig/${ban}`).catch(() => null), DC.get(`pick/${ban}`).catch(() => null)]);
-  conf = c || {}; picks = p || {};
+  const p = (await DC.get(`pick/${ban}`).catch(() => null)) || {};
+  conf = p._config || {}; delete p._config; picks = p;
   cap = conf.cap || DC.defaultCap(rosterN);
   paint();
 }
@@ -98,7 +98,7 @@ async function choose(slotId) {
     const path = `pick/${ban}/${me()}`;
     await DC.put(path, { slot: slotId, name: DC.student.name, num: DC.student.num || 0, ts: { '.sv': 'timestamp' } });
     // 서버 시각 순으로 내 순번 확인 — 정원 밖이면(동시에 누른 친구가 더 빨랐으면) 내 선택을 되돌린다.
-    const all = (await DC.get(`pick/${ban}`)) || {};
+    const all = (await DC.get(`pick/${ban}`)) || {}; delete all._config;
     const rank = DC.slotMembers(all, slotId).findIndex(x => x.id === me());
     if (rank >= cap) {
       if (prev) await DC.put(path, prev); else await DC.del(path);
@@ -121,7 +121,7 @@ DC.start({ title: '🧩 매체·분열 고르기', subtitle: '활동 2 · 1차�
   await load();
   // 선생님이 "고르기 시작"을 누르거나 친구가 고르면 즉시 반영(실시간 스트림) + 끊김 대비 느린 폴링
   const onChange = () => { if (!busy) load(); };
-  const live = DC.listen(`pickConfig/${ban}`, onChange) && DC.listen(`pick/${ban}`, onChange);
+  const live = DC.listen(`pick/${ban}`, onChange);
   setInterval(() => { if (!document.hidden && !busy) load(); }, live ? 10000 : 2500);
 });
 </script>

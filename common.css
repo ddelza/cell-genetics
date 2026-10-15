@@ -134,3 +134,6 @@ details.cg-rubric summary { cursor: pointer; font-weight: 700; color: var(--text
 .cg-media { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .cg-media .dc-choice { justify-content: center; text-align: center; }
 .dc-choice.disabled { opacity: 0.35; pointer-events: none; }
+.cg-table th small { display: block; font-weight: 400; font-size: 0.66rem; color: var(--text-muted); line-height: 1.35; margin-top: 2px; }
+.cg-table th:first-child { width: 34%; }
+.cg-table input:disabled { background: #f1f3f5; }
