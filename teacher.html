@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>교사용 채점 — 세포분열과 유전 표현하기</title>
+<link rel="stylesheet" href="common.css?v=1">
+<style>
+.wrap { max-width: 1150px; }
+.step { display: none; } .step.active { display: block; }
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.toolbar select { padding: 9px; border-radius: 10px; border: 1.5px solid var(--accent); font-family: inherit; font-size: 0.88rem; }
+.toolbar .btn { width: auto; margin: 0; }
+.grid-wrap { overflow-x: auto; background: var(--surface); border-radius: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+table.grid { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
+.grid th, .grid td { border-bottom: 1px solid #eef1f7; padding: 7px 8px; text-align: center; white-space: nowrap; }
+.grid th { background: #f2f4fa; position: sticky; top: 0; font-size: 0.74rem; }
+.grid th small { display: block; font-weight: 400; color: var(--text-muted); }
+.grid td.name { text-align: left; font-weight: 600; }
+.grid tr.stu { cursor: pointer; }
+.grid tr.stu:hover td { background: #f6faf7; }
+.grid td.done { color: #2f9e44; font-weight: 700; }
+.grid td.miss { color: #ccc; }
+.grid td.sc { font-weight: 700; }
+.grid td.sc.empty { color: #ccc; font-weight: 400; }
+.grid td.total { font-weight: 800; color: var(--accent); }
+.grid td.memo { text-align: left; max-width: 180px; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); }
+.grid tr.sum td { background: #f8f9fc; font-weight: 700; }
+.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: none; align-items: flex-start; justify-content: center; padding: 20px 10px; overflow-y: auto; z-index: 50; }
+.modal-bg.show { display: flex; }
+.modal { background: var(--bg); border-radius: 14px; padding: 14px; max-width: 1050px; width: 100%; }
+.mhead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; position: sticky; top: -20px; background: var(--bg); padding: 6px 0; z-index: 2; }
+.mhead h3 { margin: 0; flex: 1; font-size: 1rem; }
+.mhead .btn { width: auto; margin: 0; padding: 8px 12px; }
+.sec { background: var(--surface); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.sec h4 { margin: 0 0 8px; font-size: 0.92rem; color: var(--accent); }
+.crit { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px; border-top: 1px dashed #dde3ea; padding-top: 10px; margin-top: 10px; }
+.crit:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+@media (max-width: 760px) { .crit { grid-template-columns: 1fr; } }
+.ans b { display: block; font-size: 0.74rem; color: var(--accent); margin-top: 6px; }
+.ans b:first-child { margin-top: 0; }
+.ans div { white-space: pre-wrap; word-break: break-word; font-size: 0.86rem; line-height: 1.6; }
+.ans .none { color: #bbb; }
+.scorebox .ttl { font-weight: 700; font-size: 0.84rem; margin-bottom: 6px; }
+.pts { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 6px; }
+.pts button { min-width: 36px; padding: 7px 8px; border: 1.5px solid var(--border); background: var(--surface); border-radius: 8px; font-size: 0.86rem; font-weight: 700; cursor: pointer; font-family: inherit; }
+.pts button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pts button.clear { min-width: 0; color: var(--text-muted); font-weight: 400; font-size: 0.74rem; }
+.rub { font-size: 0.74rem; line-height: 1.5; color: #555; }
+.rub div { margin: 2px 0; }
+.rub i { font-style: normal; font-weight: 700; color: var(--accent); }
+.key { font-size: 0.74rem; line-height: 1.55; background: #fff9db; border-radius: 8px; padding: 6px 8px; margin-top: 6px; color: #6b5800; }
+.savestate { font-size: 0.74rem; color: var(--text-muted); }
+.memo-in { width: 100%; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header"><h1>🧬 세포분열과 유전 표현하기 · 교사용 채점</h1><p id="semLabel"></p></div>
+
+  <div class="step active" id="step-pw">
+    <div class="card" style="max-width:420px;margin:0 auto">
+      <h2>비밀번호</h2>
+      <input type="password" id="pwInput">
+      <div class="error-msg" id="pwError"></div>
+      <button class="btn" onclick="checkPw()">입장</button>
+    </div>
+  </div>
+
+  <div class="step" id="step-main">
+    <div class="toolbar">
+      <select id="banSelect" onchange="loadClass()"></select>
+      <button class="btn small secondary" onclick="loadClass()">🔄 새로고침</button>
+      <button class="btn small secondary" onclick="exportCsv()">⬇️ CSV 내보내기</button>
+      <a class="btn small secondary" href="division-show.html" target="_blank" rel="noopener" style="text-decoration:none;text-align:center">👀 모둠 자료 보기</a>
+      <span class="dc-muted" id="loadInfo"></span>
+    </div>
+    <p class="hint">학생 줄을 누르면 답안을 보며 채점할 수 있어요. 점수 버튼을 누르면 바로 저장돼요. (모둠 자료 페이지는 학생 화면에서 교사 계정 3000/김병선으로 로그인돼 있어야 열려요)</p>
+    <div class="grid-wrap"><table class="grid" id="grid"></table></div>
+  </div>
+</div>
+<div class="modal-bg" id="modal" onclick="if(event.target===this)closeModal()"><div class="modal" id="modalBody"></div></div>
+
+<script src="session.js?v=1"></script>
+<script src="cg.js?v=1"></script>
+<script>
+const PASSWORD = 'byung0703!';
+
+// 채점 항목 — 이번 범위(유전 9 + 세포분열 9 = 18점). 성찰일지(6점)는 이후 추가.
+const CRIT = [
+  { id: 'panda', label: '유전의 원리 분석·도출', short: '유전 원리', max: 9, src: 'panda',
+    rubric: [
+      ['모의 활동에 유전 법칙 적용하기 (3)', [[3, '모의 활동·사례 분석으로 멘델의 유전 법칙이 자손의 형질 결정에 어떻게 작용하는지 논리적 인과관계를 입증함'], [2, '개념은 이해하나 탐구 데이터와 연결하는 논리가 다소 개략적임'], [1, '개념 이해가 다소 부족하며 모의 활동과의 연결이 미흡함']]],
+      ['모의 활동 결과 해석하기 (2)', [[2, '수치 데이터를 정리하고 멘델의 유전 원리에 따른 기댓값과 비교하여 올바르게 분석함'], [1, '데이터를 정리했으나 수치의 확률적 경향성 분석이 다소 부족함']]],
+      ['가계도를 통한 유전자형 추론하기 (2)', [[2, '우열 관계를 판별하고 가족 구성원의 유전자형을 과학적 근거를 들어 완벽히 추론함'], [1, '유전자형을 도출했으나 추론 과정의 논리적 근거 설명이 개략적임'], [0, '우열 판별이 틀리거나 유전자형 추론 불가']]],
+      ['유전 현상 확률 계산하기 (2)', [[2, '2쌍 이상의 대립 형질 유전 시 특정 형질 확률을 독립의 법칙 등으로 정확히 도출함'], [1, '출현 가능성은 예측했으나 산출 과정이 타당하나 결과값에 일부 오차'], [0, '확률 계산 불가 또는 독립의 법칙 이해 못함']]],
+    ],
+    note: '판다 토의 5문항으로 9점을 한꺼번에 평가 (위 4개 세부 기준은 참고용)',
+    key: '① 반 전체: 표본이 많을수록 우연에 의한 오차가 줄어 이론적인 비(3:1)에 가까워짐<br>② 검정 순종(BB) × 갈색 순종(bb) → 자손 1대는 모두 검정(Bb)<br>③ 검정이 갈색에 대해 우성 — 잡종에서는 우성 형질만 나타남(우열의 원리)<br>④ 자손 1대(Bb) × 자손 1대(Bb) → 자손 2대 검정 : 갈색 ≈ 3 : 1 (BB:Bb:bb = 1:2:1)<br>⑤ 생식세포를 만들 때 대립유전자 B와 b가 분리되어 서로 다른 생식세포로 들어가고(분리의 법칙), 수정으로 무작위 조합되어 3:1이 됨. 자손 1대에 숨어 있던 열성(갈색) 유전자가 다시 나타남',
+    fields: [['counts', '모의 실험 결과'], ['q1', '1. 더 의미 있는 결과와 그 이유'], ['q2', '2. 어버이 순종 교배 설명'], ['q3', '3. 어버이 순종 교배로 추측할 수 있는 것'], ['q4', '4. 자손 1대 잡종 교배 설명(정수비 포함)'], ['q5', '5. 자손 2대 정수비의 의미']] },
+  { id: 'media', label: '매체 활용의 적절성 설명하기', short: '매체 활용', max: 2, src: 'essay',
+    rubric: [['', [[2, '매체가 분열 과정 설명에 적절한 이유를 과학적으로 제시 + 모형과 실제 세포 분열의 차이점(한계점)을 명확히 설명'], [1, '매체 선택 이유는 제시했으나 실제 현상과의 차이점 설명이 부족·추상적'], [0, '매체 활용 설명이나 실제 현상과의 비교 분석이 거의 없음']]]],
+    fields: [['myMedia', '우리 모둠 매체'], ['q1Why', '① 매체가 적절한 이유'], ['q1Limit', '② 실제 현상과의 차이점(한계점)']] },
+  { id: 'mitosis', label: '세포분열 과정 표현 — 체세포 분열', short: '체세포', max: 2, src: 'essay',
+    rubric: [['', [[2, '각 단계(전·중·후·말기)에서 염색체의 복제 및 분리 행동을 과학적 오류 없이 정확하게 표현'], [1, '주요 흐름은 나타나나 일부 단계에서 행동 표현이 불분명']]]],
+    fields: [['otherMedia', '문항 2에서 고른 매체'], ['q2Mitosis', '체세포 분열 표현']] },
+  { id: 'meiosis', label: '세포분열 과정 표현 — 감수 분열', short: '감수', max: 2, src: 'essay',
+    rubric: [['', [[2, '감수 분열만의 고유한 특징을 생물학적으로 타당하게 구현하여 체세포 분열과의 차이가 뚜렷함'], [1, '감수 분열만의 고유한 특징이 일부만 나타나거나 표현이 미흡']]]],
+    key: '상동 염색체 접합(2가 염색체), 1분열에서 상동 염색체 분리, 2회 연속 분열(2분열 전 DNA 복제 없음), 염색체 수 반감(2n→n), 딸세포 4개',
+    fields: [['otherMedia', '문항 2에서 고른 매체'], ['q2Meiosis', '감수 분열 표현']] },
+  { id: 'compare', label: '각 분열의 특징 비교·분석하기', short: '비교·분석', max: 3, src: 'essay',
+    rubric: [['', [[3, '①과정의 차이 ②분열의 목적 ③분열의 결과 3가지 관점 모두 명확히 비교·분석'], [2, '2가지 관점'], [1, '1가지 관점'], [0, '비교·분석이 미흡하거나 없음']]]],
+    key: '① 과정: 체세포 1회 분열·상동 염색체 접합 없음 / 감수 2회 연속 분열·상동 염색체 접합 후 분리<br>② 목적: 생장·재생 / 생식세포 형성<br>③ 결과: 딸세포 2개·염색체 수 변화 없음(2n→2n) / 딸세포 4개·염색체 수 반감(2n→n)',
+    fields: [['q3', '체세포 분열 vs 감수 분열']] },
+];
+const MAX_TOTAL = CRIT.reduce((s, c) => s + c.max, 0);
+
+let roster = {}, panda = {}, essay = {}, scores = {}, curBan = '', list = [], curIdx = -1;
+
+window.checkPw = function () {
+  if (document.getElementById('pwInput').value !== PASSWORD) {
+    const e = document.getElementById('pwError'); e.textContent = '비밀번호가 다릅니다.'; e.classList.add('show'); return;
+  }
+  document.getElementById('step-pw').classList.remove('active');
+  document.getElementById('step-main').classList.add('active');
+  init();
+};
+document.getElementById('pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') checkPw(); });
+
+DC.student = { id: '3000', name: '김병선', isTeacher: true };
+
+async function init() {
+  await DC.start({ needLogin: false });
+  document.getElementById('semLabel').textContent = `${DC.cfg.year}학년도 ${DC.cfg.sem}학기 · 이번 범위 ${MAX_TOTAL}점`;
+  roster = await fetch(`${DC.DB_URL}/years/${DC.cfg.year}/students.json`).then(r => r.json()) || {};
+  const bans = new Set(Object.values(roster).filter(s => String(s.grade) === '3').map(s => `${s.grade}-${s.ban}`));
+  const shallow = await Promise.all(['panda', 'essay'].map(k => DC.get(k + '?shallow=true').catch(() => null)));
+  shallow.forEach(d => Object.keys(d || {}).forEach(b => bans.add(b)));
+  const blist = [...bans].sort((a, b) => {
+    const [ga, ba] = a.split('-').map(Number), [gb, bb] = b.split('-').map(Number);
+    return (ga - gb) || (ba - bb) || a.localeCompare(b);
+  });
+  const sel = document.getElementById('banSelect');
+  sel.innerHTML = blist.map(b => {
+    const n = shallow.reduce((s, d) => s + (d && d[b] ? 1 : 0), 0);
+    return `<option value="${DC.escAttr(b)}">${DC.esc(DC.banLabel(b))}${n ? ` · 제출 있음` : ''}</option>`;
+  }).join('');
+  const firstActive = blist.find(b => shallow.some(d => d && d[b]));
+  if (firstActive) sel.value = firstActive;
+  loadClass();
+}
+
+window.loadClass = async function () {
+  curBan = document.getElementById('banSelect').value;
+  document.getElementById('loadInfo').textContent = '불러오는 중...';
+  const [p, e, s] = await Promise.all(['panda', 'essay', 'scores'].map(k => DC.get(`${k}/${curBan}`).catch(() => null)));
+  panda = p || {}; essay = e || {}; scores = s || {};
+  document.getElementById('loadInfo').textContent = `불러옴 ${new Date().toLocaleTimeString()}`;
+  list = students();
+  renderGrid();
+};
+
+function students() {
+  const map = {};
+  const [g, b] = curBan.split('-');
+  Object.entries(roster).forEach(([id, s]) => { if (String(s.grade) === g && String(s.ban) === b) map[id] = { id, name: s.name, num: s.num }; });
+  [panda, essay].forEach(d => Object.values(d).forEach(r => { if (r && !map[r.id]) map[r.id] = { id: r.id, name: r.name, num: r.num || 0 }; }));
+  return Object.values(map).sort((x, y) => (x.num - y.num) || x.id.localeCompare(y.id));
+}
+
+const has = v => v !== undefined && v !== null && v !== '';
+function total(sc) { return sc ? CRIT.reduce((s, c) => s + (has(sc[c.id]) ? +sc[c.id] : 0), 0) : 0; }
+function graded(sc) { return sc ? CRIT.filter(c => has(sc[c.id])).length : 0; }
+
+function renderGrid() {
+  let h = '<tr><th>번호</th><th>이름</th><th>판다<br>제출</th><th>논술<br>제출</th><th>매체<small>모둠 → 문항2</small></th>' +
+    CRIT.map(c => `<th>${c.short}<small>/${c.max}</small></th>`).join('') + `<th>합계<small>/${MAX_TOTAL}</small></th><th>메모</th></tr>`;
+  list.forEach((s, i) => {
+    const p = panda[s.id], e = essay[s.id], sc = scores[s.id];
+    const ea = e && e.answers || {};
+    h += `<tr class="stu" onclick="openStu(${i})"><td>${s.num || ''}</td><td class="name">${DC.esc(s.name)}</td>` +
+      (p ? `<td class="done" title="${DC.fmtTime(p.updatedAt)}">✓</td>` : '<td class="miss">·</td>') +
+      (e ? `<td class="done" title="${DC.fmtTime(e.updatedAt)}">✓</td>` : '<td class="miss">·</td>') +
+      `<td>${e ? `${DC.MEDIA_ICON[ea.myMedia] || ''}→${DC.MEDIA_ICON[ea.otherMedia] || ''}` : ''}</td>` +
+      CRIT.map(c => sc && has(sc[c.id]) ? `<td class="sc">${sc[c.id]}</td>` : '<td class="sc empty">-</td>').join('') +
+      `<td class="total">${graded(sc) ? total(sc) : ''}</td><td class="memo">${sc && sc.memo ? DC.esc(sc.memo) : ''}</td></tr>`;
+  });
+  const cnt = d => list.filter(s => d[s.id]).length;
+  const avg = c => { const v = list.map(s => scores[s.id]).filter(sc => sc && has(sc[c.id])).map(sc => +sc[c.id]); return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(1) : '-'; };
+  h += `<tr class="sum"><td></td><td class="name">${list.length}명</td><td>${cnt(panda)}</td><td>${cnt(essay)}</td><td></td>` +
+    CRIT.map(c => `<td title="평균">${avg(c)}</td>`).join('') + '<td></td><td></td></tr>';
+  document.getElementById('grid').innerHTML = h;
+}
+
+function ansText(v) {
+  if (!has(v) || (typeof v === 'object' && !Object.keys(v).length)) return '<div class="none">(빈칸)</div>';
+  if (typeof v === 'object') { // 판다 결과표
+    const r = (b, w) => has(b) && has(w) && +w ? ` → ${(b / w).toFixed(2)}` : '';
+    return '<div>' + [['g', '우리 모둠'], ['c', '반 전체'], ['s', '전교']].filter(([k]) => has(v[k + 'b']) || has(v[k + 'r']))
+      .map(([k, l]) => `${l}: 검정 ${v[k + 'b'] ?? '-'} / 갈색 ${v[k + 'r'] ?? '-'}${r(v[k + 'b'], v[k + 'r'])}`).join('\n') + '</div>';
+  }
+  return '<div>' + DC.esc(v) + '</div>';
+}
+
+window.openStu = function (i) {
+  curIdx = i;
+  const s = list[i], sc = scores[s.id] || {};
+  const recs = { panda: panda[s.id], essay: essay[s.id] };
+  let h = `<div class="mhead"><h3>${s.num || ''}번 ${DC.esc(s.name)} <span class="dc-muted" style="font-size:0.8rem">${s.id} · 합계 <b id="mTotal">${total(sc)}</b>/${MAX_TOTAL}</span></h3>` +
+    `<button class="btn small secondary" onclick="openStu(${i - 1})" ${i <= 0 ? 'disabled' : ''}>◀ 이전</button>` +
+    `<button class="btn small secondary" onclick="openStu(${i + 1})" ${i >= list.length - 1 ? 'disabled' : ''}>다음 ▶</button>` +
+    `<button class="btn small secondary" onclick="closeModal()">닫기</button></div>`;
+  [['panda', '🐼 활동 1 · 판다로 확인하는 멘델의 유전법칙'], ['essay', '🔬 활동 2 · 세포분열 표현하기 개인 논술']].forEach(([src, title]) => {
+    const rec = recs[src], a = rec && rec.answers || {};
+    h += `<div class="sec"><h4>${title} ${rec ? `<span class="dc-muted" style="font-weight:400">· 저장 ${DC.fmtTime(rec.updatedAt)}${src === 'panda' && (a.team || a.role) ? ` · ${DC.esc(a.team || '')} ${DC.esc(a.role || '')}` : ''}${src === 'essay' && a.group ? ` · ${DC.esc(a.group)}모둠` : ''}</span>` : '<span style="color:var(--danger)">· 미제출</span>'}</h4>`;
+    CRIT.filter(c => c.src === src).forEach(c => {
+      h += '<div class="crit"><div class="ans">' + c.fields.map(([f, l]) => `<b>${DC.esc(l)}</b>${ansText(a[f])}`).join('') + '</div>' +
+        `<div class="scorebox"><div class="ttl">${DC.esc(c.label)} <span class="dc-muted">/${c.max}</span></div>` +
+        `<div class="pts" data-crit="${c.id}">` + Array.from({ length: c.max + 1 }, (_, p) => `<button class="${has(sc[c.id]) && +sc[c.id] === p ? 'on' : ''}" onclick="setScore('${c.id}',${p})">${p}</button>`).join('') +
+        `<button class="clear" onclick="setScore('${c.id}',null)">지우기</button></div>` +
+        (c.note ? `<div class="dc-muted" style="font-size:0.74rem;margin-bottom:4px">${DC.esc(c.note)}</div>` : '') +
+        '<div class="rub">' + c.rubric.map(([t, rows]) => (t ? `<div style="font-weight:700;margin-top:4px">${DC.esc(t)}</div>` : '') + rows.map(([p, d]) => `<div><i>${p}</i> ${DC.esc(d)}</div>`).join('')).join('') + '</div>' +
+        (c.key ? `<details><summary class="dc-muted" style="font-size:0.74rem;cursor:pointer;margin-top:6px">💡 채점 참고(예시 답)</summary><div class="key">${c.key}</div></details>` : '') +
+        '</div></div>';
+    });
+    h += '</div>';
+  });
+  h += `<div class="sec"><h4>📝 메모</h4><input class="memo-in" id="memoIn" value="${DC.escAttr(sc.memo || '')}" placeholder="채점 메모 (Enter 또는 칸을 벗어나면 저장)"><div class="savestate" id="saveState"></div></div>`;
+  document.getElementById('modalBody').innerHTML = h;
+  document.getElementById('modal').classList.add('show');
+  const memo = document.getElementById('memoIn');
+  memo.addEventListener('change', () => saveScores({ memo: memo.value.trim() }));
+  memo.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) memo.blur(); });
+};
+
+window.closeModal = function () { document.getElementById('modal').classList.remove('show'); renderGrid(); };
+
+window.setScore = function (cid, p) {
+  document.querySelectorAll(`.pts[data-crit="${cid}"] button:not(.clear)`).forEach((b, i) => b.classList.toggle('on', i === p));
+  saveScores({ [cid]: p });
+};
+
+async function saveScores(patch) {
+  const s = list[curIdx];
+  const st = document.getElementById('saveState');
+  const rec = Object.assign({ id: s.id, name: s.name, num: s.num || 0 }, scores[s.id] || {}, patch, { updatedAt: Date.now() });
+  Object.keys(rec).forEach(k => { if (rec[k] === null || rec[k] === '') delete rec[k]; });
+  if (st) st.textContent = '저장 중...';
+  try {
+    await DC.put(`scores/${curBan}/${s.id}`, rec);
+    scores[s.id] = rec;
+    document.getElementById('mTotal').textContent = total(rec);
+    if (st) st.textContent = `✓ 저장됨 ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    if (st) st.textContent = '⚠️ 저장 실패 — 다시 눌러 주세요';
+    alert('점수 저장 실패: ' + e.message);
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (!document.getElementById('modal').classList.contains('show')) return;
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'Escape') closeModal();
+  if (e.key === 'ArrowRight' && curIdx < list.length - 1) openStu(curIdx + 1);
+  if (e.key === 'ArrowLeft' && curIdx > 0) openStu(curIdx - 1);
+});
+
+window.exportCsv = function () {
+  const q = v => '"' + String(v === undefined || v === null ? '' : v).replace(/"/g, '""') + '"';
+  const pandaCount = v => v && typeof v === 'object' ? ['g', 'c', 's'].map(k => `${v[k + 'b'] ?? ''}/${v[k + 'r'] ?? ''}`) : ['', '', ''];
+  const head = ['학번', '번호', '이름', ...CRIT.map(c => `${c.short}(${c.max})`), `합계(${MAX_TOTAL})`, '메모',
+    '판다:모둠', '판다:역할', '모둠 검정/갈색', '반 검정/갈색', '전교 검정/갈색', '판다:1', '판다:2', '판다:3', '판다:4', '판다:5',
+    '논술:모둠', '모둠 매체', '1-①적절한 이유', '1-②한계점', '문항2 매체', '2-①체세포', '2-②감수', '3.비교·분석'];
+  const lines = [head.map(q).join(',')];
+  list.forEach(s => {
+    const sc = scores[s.id] || {}, pa = (panda[s.id] || {}).answers || {}, ea = (essay[s.id] || {}).answers || {};
+    lines.push([s.id, s.num, s.name, ...CRIT.map(c => sc[c.id]), graded(sc) ? total(sc) : '', sc.memo,
+      pa.team, pa.role, ...pandaCount(pa.counts), pa.q1, pa.q2, pa.q3, pa.q4, pa.q5,
+      ea.group, ea.myMedia, ea.q1Why, ea.q1Limit, ea.otherMedia, ea.q2Mitosis, ea.q2Meiosis, ea.q3].map(q).join(','));
+  });
+  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `세포분열과유전_${DC.banLabel(curBan).replace(/\s/g, '')}.csv`; a.click();
+};
+</script>
+</body>
+</html>

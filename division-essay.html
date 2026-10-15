@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>세포분열 표현하기 개인 논술 — 세포분열과 유전 표현하기</title>
+<link rel="stylesheet" href="common.css?v=1">
+</head>
+<body>
+<div class="wrap">
+  <div id="dc-head"></div>
+  <div class="card" style="font-size:0.84rem;line-height:1.65">
+    <b>✍️ 개인 논술 안내</b>
+    <ul style="margin:6px 0 0;padding-left:20px">
+      <li><b>문항 1</b>은 <b>우리 모둠이 고른 매체</b>에 대해 써요.</li>
+      <li><b>문항 2</b>는 우리 모둠 매체가 <b>아닌</b> 나머지 2개 중 <b>하나를 골라</b>, 그 매체로 세포 분열을 어떻게 표현할지 써요.</li>
+      <li><b>문항 3</b>은 매체와 상관없이 체세포 분열과 감수 분열을 비교·분석해요.</li>
+    </ul>
+    <p style="margin:8px 0 0"><a href="division-show.html" target="_blank" rel="noopener" style="color:var(--accent);font-weight:700">👀 다른 모둠 표현 자료 보기 (새 창)</a></p>
+  </div>
+  <div id="form"></div>
+</div>
+
+<script src="session.js?v=1"></script>
+<script src="cg.js?v=1"></script>
+<script>
+const MEDIA_LABELS = Object.fromEntries(DC.MEDIA.map(m => [m, DC.MEDIA_ICON[m] + ' ' + m]));
+const GROUPS = [
+  { title: '내 모둠', fields: [
+    { id: 'group', type: 'radio', short: '내 모둠', label: '내 모둠 번호', options: Array.from({ length: DC.GROUP_COUNT }, (_, i) => String(i + 1)), labels: Object.fromEntries(Array.from({ length: DC.GROUP_COUNT }, (_, i) => [String(i + 1), (i + 1) + '모둠'])) },
+    { id: 'myMedia', type: 'radio', cls: 'cg-media', short: '우리 모둠 매체', label: '우리 모둠이 고른 매체', options: DC.MEDIA, labels: MEDIA_LABELS },
+  ] },
+  { title: '문항 1. 매체 활용의 적절성 설명하기', fields: [
+    { type: 'info', html: '<div class="cg-q-head"><span style="font-size:0.82rem">우리 모둠이 고른 매체에 대해 써요.</span><span class="cg-pts">논술 2점</span></div>' +
+      DC.rubricHtml([[2, '선택한 매체가 분열 과정을 설명하기에 적절한 이유를 과학적으로 제시하고, 제작한 모형이 실제 세포 분열 현상과 가지는 차이점(한계점)을 명확하게 설명함.'],
+        [1, '매체 선택의 이유는 제시하였으나 실제 현상과의 차이점에 대한 설명이 다소 부족하거나 추상적임.'],
+        [0, '매체 활용에 대한 설명이나 실제 현상과의 비교 분석이 거의 없음.']]) },
+    { id: 'q1Why', type: 'textarea', short: '1-① 매체가 적절한 이유', label: '① 우리 모둠 매체가 세포 분열 과정을 설명하기에 적절한 까닭', hint: '이 매체의 어떤 특징이 세포 분열의 어떤 부분을 잘 보여 주나요? 과학적인 이유를 들어 써요.' },
+    { id: 'q1Limit', type: 'textarea', short: '1-② 실제 현상과의 차이점(한계점)', label: '② 우리가 만든 표현(모형)이 실제 세포 분열과 다른 점(한계점)', hint: '실제 세포 분열에서는 어떠한데, 우리 표현에서는 어떻게 달랐는지 비교해서 써요.' },
+  ] },
+  { title: '문항 2. 세포분열 과정 표현하기', fields: [
+    { type: 'info', html: '<div class="cg-q-head"><span style="font-size:0.82rem">우리 모둠 매체가 <b>아닌</b> 매체 하나를 골라, 그 매체로 표현한다면?</span><span class="cg-pts">논술 4점</span></div>' },
+    { id: 'otherMedia', type: 'radio', cls: 'cg-media', short: '문항 2에서 고른 매체', label: '표현할 매체 고르기 (우리 모둠 매체 제외)', options: DC.MEDIA, labels: MEDIA_LABELS },
+    { id: 'q2Mitosis', type: 'textarea', wrap: true, rows: 6, pts: '2점', short: '2-① 체세포 분열 표현', label: '① 체세포 분열 표현하기',
+      hint: '고른 매체로 체세포 분열의 각 단계(전기·중기·후기·말기)를 어떻게 표현할지, 염색체가 어떻게 움직이는지 드러나게 써요.',
+      rubric: [[2, '체세포 분열의 각 단계(전·중·후·말기)에서 염색체의 복제 및 분리 행동을 과학적 오류 없이 정확하게 표현함.'], [1, '분열의 주요 흐름은 나타나 있으나, 일부 단계에서 행동 표현이 불분명함.']] },
+    { id: 'q2Meiosis', type: 'textarea', wrap: true, rows: 6, pts: '2점', short: '2-② 감수 분열 표현', label: '② 감수 분열 표현하기',
+      hint: '고른 매체로 감수 분열을 어떻게 표현할지 써요. 체세포 분열과 다른, 감수 분열만의 특징이 드러나야 해요.',
+      rubric: [[2, '감수 분열만의 고유한 특징을 생물학적으로 타당하게 구현하여 체세포 분열과의 차이가 뚜렷하게 드러남.'], [1, '감수 분열만의 고유한 특징이 일부만 나타나거나, 표현이 미흡함.']] },
+  ] },
+  { title: '문항 3. 각 분열의 특징 비교·분석하기', fields: [
+    { id: 'q3', type: 'textarea', rows: 8, pts: '논술 3점', short: '3. 체세포 분열 vs 감수 분열', label: '체세포 분열과 감수 분열의 특징을 비교·분석하여 서술하시오.',
+      hint: '매체와 상관없이 써요.',
+      rubric: [[3, '체세포 분열과 감수 분열의 특징을 ①과정의 차이, ②분열의 목적, ③분열의 결과 총 3가지 관점에서 명확하게 비교·분석함.'],
+        [2, '①과정의 차이, ②분열의 목적, ③분열의 결과 중 2가지 관점에서 명확하게 비교·분석함.'],
+        [1, '①과정의 차이, ②분열의 목적, ③분열의 결과 중 1가지 관점에서 명확하게 비교·분석함.'],
+        [0, '체세포 분열과 감수 분열의 특징 비교·분석이 미흡하거나 전혀 없음.']] },
+  ] },
+];
+
+// 문항 2: 우리 모둠 매체는 고를 수 없게 막는다.
+function syncMedia(api) {
+  const f = api.formId;
+  const mine = document.querySelector(`input[name="${f}__myMedia"]:checked`);
+  document.querySelectorAll(`input[name="${f}__otherMedia"]`).forEach(inp => {
+    const off = !!mine && inp.value === mine.value;
+    inp.closest('.dc-choice').classList.toggle('disabled', off);
+    inp.disabled = off;
+    if (off) inp.checked = false;
+  });
+}
+
+DC.start({ title: '🔬 세포분열 표현하기 · 개인 논술', subtitle: '활동 2-② · 매체 활용 · 분열 과정 표현 · 특징 비교' }).then(() => {
+  DC.form({
+    mount: '#form', key: 'essay', groups: GROUPS,
+    required: ['group', 'myMedia', 'q1Why', 'q1Limit', 'otherMedia', 'q2Mitosis', 'q2Meiosis', 'q3'],
+    validate: ans => ans.myMedia === ans.otherMedia ? '문항 2는 우리 모둠 매체가 아닌 다른 매체를 골라야 해요.' : '',
+    onLoad: (rec, api) => {
+      syncMedia(api);
+      api.el.addEventListener('change', e => { if (e.target.name === api.formId + '__myMedia') syncMedia(api); });
+    },
+  });
+});
+</script>
+</body>
+</html>

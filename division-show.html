@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>모둠 세포분열 표현 자료 — 세포분열과 유전 표현하기</title>
+<link rel="stylesheet" href="common.css?v=1">
+<style>
+.gcard { background: var(--surface); border-radius: 14px; padding: 14px 16px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); font-size: 0.84rem; line-height: 1.6; }
+.gcard.mine { outline: 2px solid var(--accent); }
+.gcard.empty { color: var(--text-muted); }
+.gcard h3 { margin: 0 0 4px; font-size: 0.95rem; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.mtag { font-size: 0.72rem; background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 2px 9px; font-weight: 700; }
+.gcard .row { margin-top: 6px; }
+.gcard .row b { display: block; font-size: 0.74rem; color: var(--accent); }
+.gcard .row div { white-space: pre-wrap; word-break: break-word; }
+.gcard a { color: var(--accent); word-break: break-all; }
+.filter-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="dc-head"></div>
+
+  <div class="card">
+    <h2>✏️ 우리 모둠 자료 올리기</h2>
+    <p class="hint">모둠원 누구나 고칠 수 있어요(마지막에 저장한 내용이 남아요). 다른 모둠 친구들이 개인 논술을 쓸 때 참고하니, 표현 방법을 구체적으로 적어 주세요.</p>
+    <label class="field-label">우리 모둠</label>
+    <select class="cg-select" id="gSel"></select>
+    <div id="gForm" style="display:none">
+      <label class="field-label">우리 모둠이 고른 매체</label>
+      <div class="dc-choices cg-media" id="gMedia"></div>
+      <label class="field-label">모둠원</label>
+      <input type="text" id="gMembers" placeholder="예) 3번 김OO, 7번 이OO, ...">
+      <label class="field-label">결과물 링크 <span class="dc-muted">(선택: 바이브코딩 사이트, 영상·사진 공유 링크 등)</span></label>
+      <input type="text" id="gLink" placeholder="https://...">
+      <label class="field-label">🔵 체세포 분열은 이렇게 표현했어요</label>
+      <div class="dc-hint">전기·중기·후기·말기에서 염색체의 복제와 분리를 무엇으로, 어떻게 나타냈나요?</div>
+      <textarea id="gMitosis" rows="4"></textarea>
+      <label class="field-label">🟣 감수 분열은 이렇게 표현했어요</label>
+      <div class="dc-hint">상동 염색체의 결합·분리, 두 번의 연속 분열 등 감수 분열만의 특징을 어떻게 나타냈나요?</div>
+      <textarea id="gMeiosis" rows="4"></textarea>
+      <div class="error-msg" id="gErr"></div>
+      <div class="ok-msg" id="gOk"></div>
+      <button class="btn" id="gSave">💾 우리 모둠 자료 저장</button>
+    </div>
+  </div>
+
+  <div class="dc-board">
+    <div class="dc-board-title">👀 우리 반 모둠 자료 둘러보기</div>
+    <select class="cg-select" id="banSel" style="display:none;margin-bottom:8px"></select>
+    <div class="filter-row" id="filterRow"></div>
+    <div id="list"><div class="loading-state">불러오는 중...</div></div>
+  </div>
+</div>
+
+<script src="session.js?v=1"></script>
+<script src="cg.js?v=1"></script>
+<script>
+let ban, viewBan, groups = {}, loaded = null, filter = '';
+const LS_KEY = 'cgMyGroup';
+const val = id => document.getElementById(id).value.trim();
+const isUrl = s => /^https?:\/\/\S+$/i.test(s || '');
+
+function mediaRadios(sel) {
+  document.getElementById('gMedia').innerHTML = DC.MEDIA.map(m =>
+    `<label class="dc-choice"><input type="radio" name="gMedia" value="${m}"${sel === m ? ' checked' : ''}><span>${DC.MEDIA_ICON[m]} ${m}</span></label>`).join('');
+}
+
+async function pickGroup() {
+  const g = document.getElementById('gSel').value;
+  const form = document.getElementById('gForm');
+  if (!g) { form.style.display = 'none'; return; }
+  try { localStorage.setItem(LS_KEY, g); } catch (e) {}
+  const rec = await DC.get(`show/${ban}/${g}`).catch(() => null);
+  loaded = { g, updatedAt: rec ? rec.updatedAt : 0 };
+  mediaRadios(rec && rec.media);
+  document.getElementById('gMembers').value = rec ? rec.members || '' : '';
+  document.getElementById('gLink').value = rec ? rec.link || '' : '';
+  document.getElementById('gMitosis').value = rec ? rec.mitosis || '' : '';
+  document.getElementById('gMeiosis').value = rec ? rec.meiosis || '' : '';
+  form.style.display = 'block';
+  paint();
+}
+
+async function saveGroup() {
+  const err = document.getElementById('gErr'), ok = document.getElementById('gOk');
+  err.classList.remove('show'); ok.classList.remove('show');
+  const g = loaded && loaded.g;
+  const m = document.querySelector('input[name="gMedia"]:checked');
+  if (!m) { err.textContent = '우리 모둠 매체를 골라 주세요.'; err.classList.add('show'); return; }
+  if (val('gLink') && !isUrl(val('gLink'))) { err.textContent = '링크는 https:// 로 시작하는 주소를 넣어 주세요.'; err.classList.add('show'); return; }
+  const btn = document.getElementById('gSave');
+  btn.disabled = true; btn.textContent = '저장 중...';
+  try {
+    const cur = await DC.get(`show/${ban}/${g}`).catch(() => null);
+    if (cur && cur.updatedAt && cur.updatedAt !== loaded.updatedAt &&
+      !confirm(`그 사이 ${cur.lastEditorName || '다른 모둠원'}이(가) ${DC.fmtTime(cur.updatedAt)}에 이 모둠 자료를 고쳤어요.\n내 내용으로 덮어쓸까요? (취소하면 최신 내용을 다시 불러와요)`)) {
+      await pickGroup(); return;
+    }
+    const rec = { group: +g, media: m.value, members: val('gMembers'), link: val('gLink'), mitosis: val('gMitosis'), meiosis: val('gMeiosis'),
+      lastEditor: DC.student.id, lastEditorName: DC.student.name, updatedAt: Date.now() };
+    await DC.put(`show/${ban}/${g}`, rec);
+    loaded.updatedAt = rec.updatedAt;
+    groups[g] = rec;
+    ok.textContent = `저장되었어요! (${DC.fmtTime(rec.updatedAt)})`; ok.classList.add('show');
+    paint();
+  } catch (e) {
+    err.textContent = e.message + ' — 다시 눌러 주세요.'; err.classList.add('show');
+  } finally { btn.disabled = false; btn.textContent = '💾 우리 모둠 자료 저장'; }
+}
+
+async function load() {
+  groups = (await DC.get(`show/${viewBan}`).catch(() => null)) || {};
+  if (Array.isArray(groups)) groups = Object.assign({}, groups); // 키가 숫자라 배열로 올 수 있음
+  paint();
+}
+
+function paint() {
+  document.getElementById('filterRow').innerHTML = ['', ...DC.MEDIA].map(m =>
+    `<button class="sort-btn${filter === m ? ' active' : ''}" data-f="${m}">${m ? DC.MEDIA_ICON[m] + ' ' + m : '전체'}</button>`).join('');
+  const myG = viewBan === ban && loaded ? String(loaded.g) : '';
+  let h = '';
+  for (let g = 1; g <= DC.GROUP_COUNT; g++) {
+    const r = groups[g];
+    if (filter && (!r || r.media !== filter)) continue;
+    if (!r) { h += `<div class="gcard empty${myG === String(g) ? ' mine' : ''}"><h3>${g}모둠</h3>아직 자료가 없어요.</div>`; continue; }
+    h += `<div class="gcard${myG === String(g) ? ' mine' : ''}"><h3>${g}모둠 <span class="mtag">${DC.MEDIA_ICON[r.media] || ''} ${DC.esc(r.media)}</span></h3>` +
+      (r.members ? `<div class="dc-muted">${DC.esc(r.members)}</div>` : '') +
+      (isUrl(r.link) ? `<div class="row"><b>결과물</b><div><a href="${DC.escAttr(r.link)}" target="_blank" rel="noopener">${DC.esc(r.link)}</a></div></div>` : '') +
+      (r.mitosis ? `<div class="row"><b>🔵 체세포 분열 표현</b><div>${DC.esc(r.mitosis)}</div></div>` : '') +
+      (r.meiosis ? `<div class="row"><b>🟣 감수 분열 표현</b><div>${DC.esc(r.meiosis)}</div></div>` : '') +
+      `<div class="dc-muted" style="margin-top:6px;font-size:0.72rem">마지막 수정: ${DC.esc(r.lastEditorName || '')} · ${DC.fmtTime(r.updatedAt)}</div></div>`;
+  }
+  document.getElementById('list').innerHTML = h || '<div class="empty-state">해당 매체 모둠이 없어요.</div>';
+}
+
+document.getElementById('filterRow').addEventListener('click', e => {
+  const b = e.target.closest('button[data-f]'); if (!b) return;
+  filter = b.dataset.f; paint();
+});
+
+DC.start({ title: '🔬 세포분열 표현하기 · 모둠 자료', subtitle: '활동 2-① · 모둠 표현 자료 올리기 · 둘러보기' }).then(async () => {
+  ban = viewBan = DC.myBan();
+  const sel = document.getElementById('gSel');
+  sel.innerHTML = '<option value="">모둠을 골라 주세요</option>' +
+    Array.from({ length: DC.GROUP_COUNT }, (_, i) => `<option value="${i + 1}">${i + 1}모둠</option>`).join('');
+  sel.onchange = pickGroup;
+  document.getElementById('gSave').onclick = saveGroup;
+  let saved = ''; try { saved = localStorage.getItem(LS_KEY) || ''; } catch (e) {}
+  if (saved) { sel.value = saved; await pickGroup(); }
+  if (DC.student.isTeacher) { // 교사 계정: 반을 골라 볼 수 있게
+    const d = await DC.get('show?shallow=true').catch(() => null);
+    const bans = Object.keys(d || {}).sort();
+    if (!bans.includes(ban)) bans.unshift(ban);
+    const bs = document.getElementById('banSel');
+    bs.innerHTML = bans.map(b => `<option value="${b}">${DC.banLabel(b)}</option>`).join('');
+    bs.style.display = 'block';
+    bs.onchange = () => { viewBan = bs.value; load(); };
+  }
+  load();
+  setInterval(() => { if (!document.hidden) load(); }, 15000);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>판다로 확인하는 멘델의 유전법칙 — 세포분열과 유전 표현하기</title>
+<link rel="stylesheet" href="common.css?v=1">
+<style>
+.floor { display: grid; grid-template-columns: 64px 1fr; gap: 4px 10px; font-size: 0.82rem; line-height: 1.55; margin: 8px 0; }
+.floor b { color: var(--accent); }
+.gene { font-family: Consolas, monospace; font-weight: 700; background: #f2f4fa; border-radius: 4px; padding: 0 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="dc-head"></div>
+  <div id="form"></div>
+</div>
+
+<script src="session.js?v=1"></script>
+<script src="cg.js?v=1"></script>
+<script>
+const GAME = '<div class="concept"><h3>🐼 판다의 유전 (마인크래프트) 다시 보기</h3>' +
+  '<div class="floor">' +
+  '<b>4층</b><div>할아버지·할머니 판다 = <b>어버이(순종)</b> — 검정 판다 <span class="gene">BB</span> × 갈색 판다 <span class="gene">bb</span></div>' +
+  '<b>3층</b><div>부모 판다 = <b>자손 1대(잡종)</b> <span class="gene">Bb</span> — 서로 교배시켜 아기 판다를 만듦</div>' +
+  '<b>1층·바깥</b><div>아기 판다 = <b>자손 2대(??)</b> — 색(검정/갈색)에 따라 분류해서 셈</div>' +
+  '</div><p class="dc-muted" style="margin:0">모둠 기록지를 보면서 결과를 옮겨 적고, 모둠 토의 내용을 바탕으로 <b>내 생각을 내 말로</b> 써요.</p></div>';
+
+const N = v => (v === '' || v === null || v === undefined || isNaN(+v)) ? null : +v;
+function ratioText(b, r) {
+  b = N(b); r = N(r);
+  if (b === null || r === null) return '-';
+  if (r === 0) return b > 0 ? '갈색 0' : '-';
+  return (b / r).toFixed(2) + ' (약 ' + (Math.round(b / r * 10) / 10) + ' : 1)';
+}
+const ROWS = [['g', '우리 모둠'], ['c', '반 전체'], ['s', '전교 <span class="dc-muted">(알면)</span>']];
+const COUNTS = {
+  id: 'counts', type: 'custom', short: '모의 실험 결과',
+  label: '모의 실험 결과 (자손 2대 아기 판다 수)',
+  hint: '잘못 분류된 판다도 색을 잘 보고 포함해서 센 결과를 적어요. 반 전체 결과는 선생님이 알려 줘요.',
+  render: (val, name) => {
+    val = val || {};
+    return '<table class="cg-table" id="' + name + '"><tr><th></th><th>검정</th><th>갈색</th><th>검정 ÷ 갈색</th></tr>' +
+      ROWS.map(([k, lab]) => '<tr><th>' + lab + '</th>' +
+        '<td><input type="number" min="0" inputmode="numeric" data-c="' + k + 'b" value="' + DC.escAttr(val[k + 'b'] ?? '') + '"></td>' +
+        '<td><input type="number" min="0" inputmode="numeric" data-c="' + k + 'r" value="' + DC.escAttr(val[k + 'r'] ?? '') + '"></td>' +
+        '<td class="ratio" data-ratio="' + k + '">' + ratioText(val[k + 'b'], val[k + 'r']) + '</td></tr>').join('') + '</table>';
+  },
+  read: (root, name) => {
+    const out = {};
+    root.querySelectorAll('#' + name + ' input[data-c]').forEach(el => { if (el.value !== '') out[el.dataset.c] = +el.value; });
+    return out;
+  },
+  text: v => ROWS.filter(([k]) => N(v[k + 'b']) !== null || N(v[k + 'r']) !== null)
+    .map(([k, lab]) => lab.replace(/<[^>]+>/g, '').replace(' (알면)', '') + ': 검정 ' + (v[k + 'b'] ?? '-') + ' / 갈색 ' + (v[k + 'r'] ?? '-') + ' → ' + ratioText(v[k + 'b'], v[k + 'r'])).join('\n'),
+};
+
+const RUBRIC = [
+  ['모의 활동에 유전 법칙 적용하기 (3점)', [
+    [3, '모의 활동이나 사례 분석을 통해 멘델의 유전 법칙이 자손의 형질 결정에 어떻게 작용하는지 논리적 인과관계를 입증함.'],
+    [2, '유전 법칙의 개념은 이해하고 있으나, 이를 탐구 데이터와 연결하여 설명하는 논리가 다소 개략적임.'],
+    [1, '유전 법칙의 개념에 대한 이해가 다소 부족하며 모의 활동과의 연결이 미흡함.'],
+  ]],
+  ['모의 활동 결과 해석하기 (2점)', [
+    [2, '모의 활동을 통해 얻은 수치 데이터를 정리하고, 멘델의 유전 원리에 따른 기댓값과 비교하여 올바르게 분석함.'],
+    [1, '데이터를 정리하였으나, 수치가 가지는 확률적 경향성에 대한 분석이 다소 부족함.'],
+  ]],
+];
+const RUBRIC_HTML = '<details class="cg-rubric"><summary>📋 평가 기준 보기</summary>' +
+  RUBRIC.map(([t, rows]) => '<div style="font-weight:700;margin-top:6px">' + t + '</div><table>' +
+    rows.map(r => '<tr><td class="pt">' + r[0] + '점</td><td>' + r[1] + '</td></tr>').join('') + '</table>').join('') + '</details>';
+
+const GROUPS = [
+  { title: '① 모의 실험 결과 기록하기', fields: [
+    { type: 'info', html: GAME },
+    { id: 'team', type: 'text', short: '모둠', label: '우리 모둠 (번호나 이름)', placeholder: '예) 3모둠' },
+    { id: 'role', type: 'radio', short: '나의 역할', label: '나의 역할', options: ['대장', '판다결혼정보회사직원', '판다유치원교사', '판다양로원직원', '철도공사직원'] },
+    COUNTS,
+  ] },
+  { title: '② 유전의 원리 분석·도출하기 (개인 논술 · 9점)', fields: [
+    { type: 'info', html: '<div style="font-size:0.82rem;line-height:1.6">모둠 토의 문항이에요. 토의한 내용을 바탕으로 <b>자기 말로</b> 답을 써요. 수치(판다 수, 비율)를 근거로 들면 더 좋아요.</div>' + RUBRIC_HTML },
+    { id: 'q1', type: 'textarea', wrap: true, short: '1. 더 의미 있는 결과와 그 이유', label: '1. 우리 모둠 결과와 반 전체 결과 중, 어떤 결과가 더 의미있을까요? 그 이유는 무엇일까요?' },
+    { id: 'q2', type: 'textarea', wrap: true, short: '2. 어버이 순종 교배 설명', label: '2. 어버이 순종 교배에 대해 설명하기', hint: '어떤 판다끼리 교배해서 어떤 판다들이 나왔는지?' },
+    { id: 'q3', type: 'textarea', wrap: true, short: '3. 어버이 순종 교배로 추측할 수 있는 것', label: '3. 어버이 순종 판다 교배의 결과로 추측해볼 수 있는 것은?' },
+    { id: 'q4', type: 'textarea', wrap: true, rows: 5, short: '4. 자손 1대 잡종 교배 설명', label: '4. 자손 1대 잡종 교배에 대해 설명하기', hint: '어떤 판다끼리 교배해서 어떤 판다들이 나왔는지? ★ 반 전체 결과가 어떤 정수비를 나타내는지에 대한 내용을 반드시 포함해요.' },
+    { id: 'q5', type: 'textarea', wrap: true, rows: 5, short: '5. 자손 2대 정수비의 의미', label: '5. 자손 2대 검정 판다와 갈색 판다의 정수비가 갖는 의미는 무엇일까요?' },
+  ] },
+];
+
+DC.start({ title: '🐼 판다로 확인하는 멘델의 유전법칙', subtitle: '활동 1 · 유전의 원리 분석·도출하기' }).then(() => {
+  DC.form({
+    mount: '#form', key: 'panda', groups: GROUPS, saveLabel: '💾 저장하기',
+    required: ['q1', 'q2', 'q3', 'q4', 'q5'],
+    validate: ans => {
+      const c = ans.counts || {};
+      if (N(c.gb) === null || N(c.gr) === null) return '우리 모둠 검정·갈색 판다 수를 적어 주세요.';
+      if (N(c.cb) === null || N(c.cr) === null) return '반 전체 검정·갈색 판다 수를 적어 주세요.';
+      return '';
+    },
+  });
+  // 결과표 비율 자동 계산
+  document.addEventListener('input', e => {
+    const inp = e.target.closest('.cg-table input[data-c]'); if (!inp) return;
+    const tb = inp.closest('table'), k = inp.dataset.c[0];
+    const b = tb.querySelector('[data-c="' + k + 'b"]').value, r = tb.querySelector('[data-c="' + k + 'r"]').value;
+    tb.querySelector('[data-ratio="' + k + '"]').textContent = ratioText(b, r);
+  });
+});
+</script>
+</body>
+</html>

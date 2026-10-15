@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>세포분열과 유전 표현하기 · 3학년 과학</title>
+<link rel="stylesheet" href="common.css?v=1">
+<style>
+.step { display: none; }
+.step.active { display: block; }
+
+.session-card { background: var(--surface); border-radius: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); overflow: hidden; }
+.session-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 16px 18px; cursor: pointer; user-select: none;
+}
+.session-head h3 { margin: 0; font-size: 1rem; color: var(--text); }
+.session-head .chev { color: var(--text-muted); font-size: 0.85rem; transition: transform 0.2s; }
+.session-card.open .session-head .chev { transform: rotate(180deg); }
+.session-body { display: none; padding: 0 18px 18px; }
+.session-card.open .session-body { display: block; }
+.activity-list { display: flex; flex-direction: column; gap: 8px; }
+.activity-btn {
+  display: block; text-align: center; padding: 11px; border-radius: 10px; background: var(--accent-soft);
+  color: var(--accent); text-decoration: none; font-size: 0.88rem; font-weight: 600;
+}
+.activity-btn:active { opacity: 0.8; }
+.empty-note { font-size: 0.82rem; color: var(--text-muted); padding: 4px 0; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="header">
+    <h1>🧬 세포분열과 유전 표현하기</h1>
+    <p style="font-weight:700;color:var(--text);margin-bottom:2px">3학년 과학 · Ⅶ. 생식과 유전 수행평가</p>
+    <p id="semLabel">불러오는 중...</p>
+  </div>
+
+  <!-- STEP 1: 로그인 -->
+  <div class="step active" id="step-login">
+    <div class="card">
+      <h2>학생 확인</h2>
+      <p class="hint">학번(4자리)과 이름을 입력해주세요. 예) 3학년 1반 5번 → 3105</p>
+      <label class="field-label" for="inputId">학번 (4자리)</label>
+      <input type="tel" id="inputId" maxlength="4" inputmode="numeric" placeholder="3105">
+      <label class="field-label" for="inputName">이름</label>
+      <input type="text" id="inputName" placeholder="홍길동">
+      <div class="error-msg" id="loginError"></div>
+      <button class="btn" id="loginBtn" onclick="onLogin()">입장하기</button>
+      <button class="btn guest" onclick="toggleGuest()">🧪 로그인 없이 체험하기</button>
+      <div id="guestBox" style="display:none;margin-top:10px">
+        <label class="field-label" for="guestBan">체험할 반 선택</label>
+        <select id="guestBan" style="width:100%;padding:11px;border:1.5px solid var(--border);border-radius:10px;font-family:inherit;font-size:0.95rem"><option value="">불러오는 중...</option></select>
+        <button class="btn guest" style="margin-top:10px" onclick="onGuest()">이 반으로 체험 시작</button>
+      </div>
+      <p class="hint" style="margin:8px 0 0;text-align:center">체험 모드에서는 입력한 내용이 저장되지 않아요.</p>
+    </div>
+  </div>
+
+  <!-- STEP 2: 차시 목록 -->
+  <div class="step" id="step-main">
+    <div class="who-banner">
+      <span id="welcomeLabel"></span>
+      <button onclick="onLogout()" id="logoutBtn">다른 학생으로</button>
+    </div>
+
+    <div class="card" style="font-size:0.84rem;line-height:1.65">
+      <b>📌 이번 수행평가에서 하는 일</b>
+      <ol style="margin:6px 0 0;padding-left:20px">
+        <li><b>판다로 확인하는 멘델의 유전법칙</b> — 마인크래프트 모의 활동 결과로 유전 원리를 분석·도출해요. <span class="dc-muted">(유전의 원리 분석·도출하기 9점)</span></li>
+        <li><b>세포분열 표현하기</b> — 모둠별로 매체(💻 바이브코딩 · 🤸 신체표현 · 🍬 젤리활용)를 골라 체세포 분열과 감수 분열을 표현하고 발표한 뒤, 개인 논술을 써요. <span class="dc-muted">(매체 활용 2 · 분열 과정 표현 4 · 특징 비교·분석 3)</span></li>
+      </ol>
+      <p class="dc-muted" style="margin:8px 0 0">논술은 개인 평가예요. 친구 글을 베끼거나 AI가 쓴 글을 그대로 내면 안 돼요.</p>
+    </div>
+
+    <div id="sessionList"></div>
+    <p style="text-align:center;margin-top:24px"><a href="teacher.html" style="font-size:0.75rem;color:var(--text-muted)">교사용 현황</a></p>
+  </div>
+</div>
+
+<script src="session.js?v=1"></script>
+<script>
+const DB_URL = 'https://gwangsu-on-default-rtdb.firebaseio.com';
+const TEACHER_ID = '3000';
+const TEACHER_NAME = '김병선';
+
+// 차시별 활동 목록 — 활동이 준비되면 links 배열에 { label, href } 형태로 추가하면 된다.
+// href는 같은 저장소 안의 다른 html 파일 경로(예: 'session1-1.html')를 넣으면 되고,
+// 그 페이지에서 session.js의 requireSrLogin()을 호출하면 여기서 확인한 학번/이름을
+// 그대로 이어받는다.
+const SESSIONS = [
+  { title: '활동 1 · 마인크래프트 판다로 확인하는 멘델의 유전법칙', links: [
+    { label: '🐼 결과 기록 + 유전의 원리 분석·도출하기 (논술 9점)', href: 'panda.html' },
+  ] },
+  { title: '활동 2 · 세포분열 표현하기', links: [
+    { label: '① 모둠 표현 자료 올리기 · 다른 모둠 둘러보기', href: 'division-show.html' },
+    { label: '② 개인 논술 — 매체 활용 · 분열 과정 표현 · 특징 비교 (9점)', href: 'division-essay.html' },
+  ] },
+];
+
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function showStep(id) {
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function setLoginError(msg) {
+  const el = document.getElementById('loginError');
+  if (!msg) { el.classList.remove('show'); el.textContent = ''; return; }
+  el.textContent = msg;
+  el.classList.add('show');
+}
+
+function renderSessions() {
+  const wrap = document.getElementById('sessionList');
+  wrap.innerHTML = SESSIONS.map((s, i) => {
+    const body = s.links.length
+      ? `<div class="activity-list">${s.links.map(l => `<a class="activity-btn" href="${esc(l.href)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join('')}</div>`
+      : `<div class="empty-note">아직 등록된 활동이 없습니다.</div>`;
+    return `<div class="session-card open" id="session-${i}">
+      <div class="session-head" onclick="toggleSession(${i})">
+        <h3>${esc(s.title)}</h3>
+        <span class="chev">▾</span>
+      </div>
+      <div class="session-body">${body}</div>
+    </div>`;
+  }).join('');
+}
+
+window.toggleSession = function(i) {
+  document.getElementById('session-' + i).classList.toggle('open');
+};
+
+async function loadCurrentConfig() {
+  const res = await fetch(`${DB_URL}/config/current.json`);
+  if (!res.ok) throw new Error('설정 정보를 불러오지 못했습니다.');
+  const data = await res.json();
+  return data || { year: new Date().getFullYear(), sem: 1 };
+}
+
+window.onLogin = async function() {
+  const id = document.getElementById('inputId').value.trim();
+  const name = document.getElementById('inputName').value.trim();
+  setLoginError('');
+
+  if (!/^\d{4}$/.test(id)) { setLoginError('학번은 4자리 숫자로 입력해주세요.'); return; }
+  if (!name) { setLoginError('이름을 입력해주세요.'); return; }
+
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true; btn.textContent = '확인 중...';
+  try {
+    const cfg = await loadCurrentConfig();
+    if (id === TEACHER_ID && name === TEACHER_NAME) {
+      const teacher = { id, name, isTeacher: true };
+      setSrStudent(teacher);
+      enterMain(cfg, teacher);
+      return;
+    }
+    const res = await fetch(`${DB_URL}/years/${cfg.year}/students/${id}.json`);
+    if (!res.ok) throw new Error('학생 명단을 불러오지 못했습니다.');
+    const rec = await res.json();
+    if (!rec || String(rec.name).trim() !== name) {
+      setLoginError('학번 또는 이름이 일치하지 않습니다. 다시 확인해주세요.');
+      return;
+    }
+    setSrStudent({ id, name: rec.name, grade: rec.grade, ban: rec.ban, num: rec.num, email: rec.email || '' });
+    enterMain(cfg, { id, name: rec.name, grade: rec.grade, ban: rec.ban, num: rec.num });
+  } catch (e) {
+    setLoginError(e.message || '확인 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+  } finally {
+    btn.disabled = false; btn.textContent = '입장하기';
+  }
+};
+
+window.toggleGuest = async function() {
+  const box = document.getElementById('guestBox');
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+  const sel = document.getElementById('guestBan');
+  if (sel.dataset.loaded) return;
+  try {
+    const cfg = await loadCurrentConfig();
+    const roster = await fetch(`${DB_URL}/years/${cfg.year}/students.json`).then(r => r.json()) || {};
+    const bans = [...new Set(Object.values(roster).filter(s => String(s.grade) === '3').map(s => s.grade + '-' + s.ban))]
+      .sort((a, b) => { const [ga, ba] = a.split('-').map(Number), [gb, bb] = b.split('-').map(Number); return ga - gb || ba - bb; });
+    sel.innerHTML = '<option value="">반을 골라 주세요</option>' + bans.map(b => { const [g, c] = b.split('-'); return `<option value="${b}">${g}학년 ${c}반</option>`; }).join('');
+    sel.dataset.loaded = '1';
+  } catch (e) { setLoginError('반 목록을 불러오지 못했습니다.'); }
+};
+
+window.onGuest = async function() {
+  const v = document.getElementById('guestBan').value;
+  if (!v) { setLoginError('체험할 반을 골라 주세요.'); return; }
+  const [grade, ban] = v.split('-').map(Number);
+  const guest = { id: 'guest', name: '체험', isGuest: true, grade, ban };
+  setSrStudent(guest);
+  try { enterMain(await loadCurrentConfig(), guest); } catch (e) { setLoginError('설정 정보를 불러오지 못했습니다.'); }
+};
+
+window.onLogout = function() {
+  clearSrStudent();
+  document.getElementById('inputId').value = '';
+  document.getElementById('inputName').value = '';
+  setLoginError('');
+  showStep('step-login');
+};
+
+function enterMain(cfg, student) {
+  document.getElementById('semLabel').textContent = `${cfg.year}학년도 ${cfg.sem}학기`;
+  document.getElementById('welcomeLabel').textContent = `✓ ${srWhoLabel(student)}${student.isTeacher || student.isGuest ? '' : '님'}`;
+  document.getElementById('logoutBtn').textContent = student.isGuest ? '체험 끝내고 로그인하기' : '다른 학생으로';
+  renderSessions();
+  showStep('step-main');
+}
+
+document.getElementById('inputId').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('inputName').focus(); }
+});
+document.getElementById('inputName').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); onLogin(); }
+});
+
+window.addEventListener('DOMContentLoaded', async function() {
+  let existing = getSrStudent();
+  if (existing && existing.isGuest && !existing.grade) { clearSrStudent(); existing = null; }
+  try {
+    const cfg = await loadCurrentConfig();
+    if (existing) {
+      enterMain(cfg, existing);
+    } else {
+      document.getElementById('semLabel').textContent = `${cfg.year}학년도 ${cfg.sem}학기`;
+    }
+  } catch (e) {
+    document.getElementById('semLabel').textContent = '불러오기 실패';
+  }
+});
+</script>
+</body>
+</html>
