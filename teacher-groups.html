@@ -30,6 +30,16 @@
 .mrow .t { color: var(--text-muted); font-size: 0.7rem; }
 .mrow select { font-size: 0.74rem; padding: 3px; border-radius: 6px; border: 1px solid var(--border); max-width: 130px; }
 .unassigned { margin-top: 14px; }
+.addbox { position: relative; margin-top: 8px; }
+.gbox input.addin { width: 100%; padding: 7px 9px; font-size: 0.8rem; border: 1.5px dashed var(--border); border-radius: 8px; background: #fbfcfd; }
+.gbox input.addin:focus { border-style: solid; border-color: var(--accent); background: #fff; }
+.sugg { position: absolute; left: 0; right: 0; top: calc(100% + 2px); background: #fff; z-index: 20; border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,0.15); overflow: hidden; }
+.sugg:empty { display: none; }
+.sopt { padding: 7px 10px; font-size: 0.8rem; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; }
+.sopt.on, .sopt:hover { background: var(--accent-soft); }
+.sopt .t { color: var(--text-muted); font-size: 0.72rem; }
+.sopt .t.free { color: #2b8a3e; font-weight: 700; }
+.sopt.none { color: var(--text-muted); cursor: default; background: none; }
 .tabs2 { display: flex; gap: 8px; margin: 4px 0 14px; }
 .tabs2 button { flex: 1; padding: 11px; border-radius: 12px; border: 2px solid var(--border); background: var(--surface); font-weight: 800; font-size: 0.92rem; cursor: pointer; font-family: inherit; color: var(--text-muted); }
 .tabs2 button.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
@@ -172,11 +182,14 @@ function paint() {
   if (document.activeElement !== capIn && !capIn.value) capIn.placeholder = cap();
   document.getElementById('capInfo').textContent = `현재 ${cap()}명 (${conf.cap ? '직접 설정' : `기본값: ${rosterN}명 ÷ 6 올림`}) · 총 ${cap() * DC.GROUP_COUNT}자리`;
 
+  const fz = focusedAdd('div');
   document.getElementById('groups').innerHTML = DC.SLOTS.map(s => {
     const mem = DC.slotMembers(picks, s.id);
     return `<div class="gbox"><h4><span>${DC.esc(DC.slotLabel(s.id))}</span><span class="cnt${mem.length > cap() ? ' over' : ''}">${mem.length}/${cap()}</span></h4>` +
-      (mem.map(m => `<div class="mrow"><span class="nm">${m.num ? m.num + '번 ' : ''}${DC.esc(m.name)}${m.byTeacher ? ' <span class="t">(교사)</span>' : ''}</span><span class="t">${m.ts ? new Date(m.ts).toLocaleTimeString() : ''}</span>${moveSelect(m.id, s.id)}</div>`).join('') || '<div class="dc-muted" style="font-size:0.8rem">아직 없음</div>') + '</div>';
+      (mem.map(m => `<div class="mrow"><span class="nm">${m.num ? m.num + '번 ' : ''}${DC.esc(m.name)}${m.byTeacher ? ' <span class="t">(교사)</span>' : ''}</span><span class="t">${m.ts ? new Date(m.ts).toLocaleTimeString() : ''}</span>${moveSelect(m.id, s.id)}</div>`).join('') || '<div class="dc-muted" style="font-size:0.8rem">아직 없음</div>') +
+      addBox('div', s.id) + '</div>';
   }).join('');
+  restoreAdd(fz);
 
   const un = banStudents().filter(s => !picks[s.id] || !DC.slot(picks[s.id].slot));
   document.getElementById('unassigned').innerHTML = `<h2>아직 안 고른 학생 (${un.length}명)</h2>` +
@@ -188,6 +201,84 @@ function studentInfo(id, src) {
   return { name: r.name || p.name || id, num: r.num || p.num || 0 };
 }
 
+
+// ---------- 모둠 카드에서 이름으로 찾아 넣기 ----------
+// 검색 결과 목록(.sugg)만 다시 그리고 입력칸 자체는 건드리지 않는다 — 입력칸을 다시 그리면 한글 조합이 깨진다.
+function addBox(kind, target) {
+  return `<div class="addbox"><input type="text" class="addin" data-kind="${kind}" data-target="${DC.escAttr(target)}" placeholder="🔍 이름·번호로 찾아 넣기" autocomplete="off"><div class="sugg"></div></div>`;
+}
+// 다시 그리기 전후로 검색칸의 포커스·입력값을 보존한다(학생을 넣은 뒤 같은 칸에서 바로 다음 학생 검색).
+function focusedAdd(kind) {
+  const el = document.activeElement;
+  if (!el || !el.classList || !el.classList.contains('addin') || el.dataset.kind !== kind) return null;
+  return { kind, target: el.dataset.target, value: el.value, s: el.selectionStart, e: el.selectionEnd };
+}
+function restoreAdd(f) {
+  if (!f) return;
+  const el = document.querySelector(`input.addin[data-kind="${f.kind}"][data-target="${CSS.escape(String(f.target))}"]`);
+  if (!el) return;
+  el.value = f.value; el.focus();
+  try { el.setSelectionRange(f.s, f.e); } catch (e) {}
+  if (f.value) renderSugg(el);
+}
+function curGroupOf(kind, id) {
+  if (kind === 'panda') { const x = pteam[id]; return x && x.group ? String(x.group) : ''; }
+  const x = picks[id]; return x && DC.slot(x.slot) ? x.slot : '';
+}
+function groupName(kind, g) { return kind === 'panda' ? g + '모둠' : DC.slot(g).no + '모둠'; }
+function searchMatches(input) {
+  const q = input.value.trim(), kind = input.dataset.kind, target = input.dataset.target;
+  if (!q) return [];
+  return banStudents()
+    .filter(st => (st.name.includes(q) || String(st.num) === q) && curGroupOf(kind, st.id) !== String(target))
+    .sort((a, b) => (!!curGroupOf(kind, a.id) - !!curGroupOf(kind, b.id)) || (a.num - b.num))
+    .slice(0, 8);
+}
+function renderSugg(input) {
+  const box = input.nextElementSibling, kind = input.dataset.kind;
+  const list = searchMatches(input);
+  input._list = list;
+  input._idx = Math.max(0, Math.min(input._idx || 0, list.length - 1));
+  if (!input.value.trim()) { box.innerHTML = ''; return; }
+  box.innerHTML = list.length ? list.map((st, i) => {
+    const cur = curGroupOf(kind, st.id);
+    return `<div class="sopt${i === input._idx ? ' on' : ''}" data-id="${DC.escAttr(st.id)}"><span>${st.num}번 ${DC.esc(st.name)}</span>` +
+      `<span class="t${cur ? '' : ' free'}">${cur ? '지금 ' + groupName(kind, cur) + ' → 옮김' : '미배정'}</span></div>`;
+  }).join('') : '<div class="sopt none">찾는 학생이 없어요 (이미 이 모둠이거나 이름이 달라요)</div>';
+}
+async function addToGroup(input, id) {
+  const kind = input.dataset.kind, target = input.dataset.target;
+  input.value = ''; input.nextElementSibling.innerHTML = '';
+  if (kind === 'panda') await moveP(id, target, true); else await moveTo(id, target, true);
+}
+document.addEventListener('input', e => {
+  if (e.target.classList && e.target.classList.contains('addin')) { e.target._idx = 0; renderSugg(e.target); }
+});
+document.addEventListener('keydown', e => {
+  const el = e.target;
+  if (!el.classList || !el.classList.contains('addin') || e.isComposing) return;
+  const list = el._list || [];
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    el._idx = ((el._idx || 0) + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % Math.max(list.length, 1);
+    renderSugg(el);
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    renderSugg(el); // 마지막 글자 조합 직후 Enter도 반영
+    const st = (el._list || [])[el._idx || 0];
+    if (st) addToGroup(el, st.id);
+  } else if (e.key === 'Escape') {
+    el.value = ''; el.nextElementSibling.innerHTML = ''; el.blur();
+  }
+});
+document.addEventListener('mousedown', e => {
+  const opt = e.target.closest('.sopt[data-id]'); if (!opt) return;
+  e.preventDefault(); // 입력칸 포커스 유지
+  addToGroup(opt.closest('.addbox').querySelector('input.addin'), opt.dataset.id);
+});
+document.addEventListener('focusout', e => {
+  if (e.target.classList && e.target.classList.contains('addin')) setTimeout(() => { if (document.activeElement !== e.target) e.target.nextElementSibling.innerHTML = ''; }, 150);
+});
 
 // ---------- 판다 활동 모둠 (교사가 직접 편성) ----------
 // pandaTeam/{반}/{학번} = { group, name, num }, pandaTeamConfig/{반} = { count }, pandaResult/{반}/{모둠} = { black, brown, ... }
@@ -215,21 +306,24 @@ function paintPanda() {
     const mem = members(g), r = presult[g];
     h += `<div class="gbox"><h4><span>🐼 ${g}모둠${g > pcount() ? ' <span class="dc-muted">(모둠 수 밖)</span>' : ''}</span><span class="cnt">${mem.length}명</span></h4>` +
       (r ? `<div class="pres"><span>결과: 검정 <b>${DC.esc(r.black)}</b> / 갈색 <b>${DC.esc(r.brown)}</b> · ${DC.esc(r.lastEditorName || '')} ${DC.fmtTime(r.updatedAt)}</span><button onclick="clearPResult(${g})">결과 지우기</button></div>` : '<div class="pres"><span class="dc-muted">결과 미입력</span></div>') +
-      (mem.map(m => `<div class="mrow"><span class="nm">${m.num ? m.num + '번 ' : ''}${DC.esc(m.name)}</span>${pSelect(m.id, g)}</div>`).join('') || '<div class="dc-muted" style="font-size:0.8rem">아직 없음</div>') + '</div>';
+      (mem.map(m => `<div class="mrow"><span class="nm">${m.num ? m.num + '번 ' : ''}${DC.esc(m.name)}</span>${pSelect(m.id, g)}</div>`).join('') || '<div class="dc-muted" style="font-size:0.8rem">아직 없음</div>') +
+      addBox('panda', g) + '</div>';
   }
+  const fz = focusedAdd('panda');
   document.getElementById('pGroups').innerHTML = h;
+  restoreAdd(fz);
   const un = banStudents().filter(s => !pteam[s.id] || !pteam[s.id].group);
   document.getElementById('pUnassigned').innerHTML = `<h2>판다 모둠 미배정 (${un.length}명)</h2>` +
     (un.length ? un.map(s => `<div class="mrow"><span class="nm">${s.num}번 ${DC.esc(s.name)}</span>${pSelect(s.id, 0)}</div>`).join('') : '<div class="dc-muted">모두 배정했어요.</div>');
 }
 
-window.moveP = async function (id, g) {
+window.moveP = async function (id, g, keepFocus) {
   if (!g) return;
   const path = `pandaTeam/${ban}/${id}`;
   if (g === '__none') await DC.del(path);
   else await DC.put(path, Object.assign(studentInfo(id, pteam), { group: +g }));
-  document.activeElement && document.activeElement.blur();
-  load();
+  if (!keepFocus && document.activeElement) document.activeElement.blur();
+  await load();
 };
 window.savePCount = async function () {
   const v = parseInt(document.getElementById('pCountIn').value, 10);
@@ -262,13 +356,13 @@ window.clearPResult = async function (g) {
   load();
 };
 
-window.moveTo = async function (id, slot) {
+window.moveTo = async function (id, slot, keepFocus) {
   if (!slot) return;
   const path = `pick/${ban}/${id}`;
   if (slot === '__none') await DC.del(path);
   else await DC.put(path, Object.assign(studentInfo(id), { slot, ts: { '.sv': 'timestamp' }, byTeacher: true }));
-  document.activeElement && document.activeElement.blur();
-  load();
+  if (!keepFocus && document.activeElement) document.activeElement.blur();
+  await load();
 };
 
 window.toggleOpen = async function () {
