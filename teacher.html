@@ -263,13 +263,16 @@ async function loadChat(id) {
 async function loadChatConfig() {
   const c = (await DC.get('chatConfig').catch(() => null)) || {};
   const open = c.open !== false;
-  document.getElementById('chatToggle').textContent = open ? '🐼 판다쌤 켜짐' : '💤 판다쌤 꺼짐';
+  document.getElementById('chatToggle').textContent = open ? '🐼 판다쌤 켜짐 (누르면 끄기)' : `💤 판다쌤 꺼짐${c.changedAt ? ' · ' + DC.fmtTime(c.changedAt) : ''} (누르면 켜기)`;
+  document.getElementById('chatToggle').style.color = open ? '' : 'var(--danger)';
   document.getElementById('chatToggle').dataset.open = open ? '1' : '';
   document.getElementById('chatLimit').value = c.dailyLimit || 40;
 }
 window.toggleChat = async function () {
   const open = !document.getElementById('chatToggle').dataset.open;
+  if (!open && !confirm('판다쌤을 끌까요? 모든 반 학생에게 "쉬는 시간"이 떠요.')) return;
   await DC.put('chatConfig/open', open);
+  await DC.put('chatConfig/changedAt', Date.now());
   loadChatConfig();
 };
 window.saveChatLimit = async function () {
