@@ -51,6 +51,10 @@ table.grid { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
 .rub i { font-style: normal; font-weight: 700; color: var(--accent); }
 .key { font-size: 0.74rem; line-height: 1.55; background: #fff9db; border-radius: 8px; padding: 6px 8px; margin-top: 6px; color: #6b5800; }
 .savestate { font-size: 0.74rem; color: var(--text-muted); }
+.chatrow { border-top: 1px dashed #dde3ea; padding: 6px 0; font-size: 0.82rem; line-height: 1.55; color: var(--text); }
+.chatrow b { color: var(--accent); font-size: 0.74rem; }
+.chatrow span { color: var(--text-muted); font-size: 0.7rem; }
+.chatrow .ca { margin-top: 4px; background: #f6f8fc; border-radius: 8px; padding: 4px 8px; }
 .memo-in { width: 100%; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 0.85rem; }
 </style>
 </head>
@@ -75,6 +79,12 @@ table.grid { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
       <button class="btn small secondary" onclick="exportCsv()">⬇️ CSV 내보내기</button>
       <a class="btn small secondary" href="division-show.html" target="_blank" rel="noopener" style="text-decoration:none;text-align:center">👀 모둠 자료 보기</a>
       <span class="dc-muted" id="loadInfo"></span>
+    </div>
+    <div class="toolbar">
+      <button class="btn small secondary" id="chatToggle" onclick="toggleChat()">🐼 판다쌤 …</button>
+      <span class="dc-muted" style="font-size:0.8rem">학생 1명 하루 질문</span>
+      <input type="number" id="chatLimit" min="1" max="500" style="width:70px;padding:7px;border:1.5px solid var(--border);border-radius:8px" onchange="saveChatLimit()">
+      <span class="dc-muted" style="font-size:0.8rem">번 · 대화 기록은 학생 줄을 눌러 맨 아래에서 확인</span>
     </div>
     <p class="hint">학생 줄을 누르면 답안을 보며 채점할 수 있어요. 점수 버튼을 누르면 바로 저장돼요. (모둠 자료 페이지는 학생 화면에서 교사 계정 3000/김병선으로 로그인돼 있어야 열려요)</p>
     <div class="grid-wrap"><table class="grid" id="grid"></table></div>
@@ -149,6 +159,7 @@ async function init() {
   const firstActive = blist.find(b => shallow.some(d => d && d[b]));
   if (firstActive) sel.value = firstActive;
   loadClass();
+  loadChatConfig();
 }
 
 window.loadClass = async function () {
@@ -226,12 +237,46 @@ window.openStu = function (i) {
     });
     h += '</div>';
   });
+  h += `<div class="sec"><h4>💬 판다쌤 대화 기록</h4><div id="chatBox" class="dc-muted" style="font-size:0.8rem">불러오는 중...</div></div>`;
   h += `<div class="sec"><h4>📝 메모</h4><input class="memo-in" id="memoIn" value="${DC.escAttr(sc.memo || '')}" placeholder="채점 메모 (Enter 또는 칸을 벗어나면 저장)"><div class="savestate" id="saveState"></div></div>`;
   document.getElementById('modalBody').innerHTML = h;
   document.getElementById('modal').classList.add('show');
   const memo = document.getElementById('memoIn');
   memo.addEventListener('change', () => saveScores({ memo: memo.value.trim() }));
   memo.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) memo.blur(); });
+  loadChat(s.id);
+};
+
+// 판다쌤 대화 기록: chatLog/{반}/{학번}/{pushId} = { q, user, reply, model, ts } (Apps Script가 기록)
+async function loadChat(id) {
+  const items = Object.values((await DC.get(`chatLog/${curBan}/${id}`).catch(() => null)) || {}).filter(Boolean).sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  const box = document.getElementById('chatBox');
+  if (!box || list[curIdx].id !== id) return;
+  box.innerHTML = items.length
+    ? `<details><summary style="cursor:pointer">질문 ${items.length}번 · 마지막 ${DC.fmtTime(items[items.length - 1].ts)} (펼치기)</summary>` +
+      items.map(x => `<div class="chatrow"><div class="cq"><b>학생${x.q ? ` [${DC.esc(x.q)}번]` : ''}</b> <span>${DC.fmtTime(x.ts)}</span><div>${DC.nl2br(x.user)}</div></div>` +
+        `<div class="ca"><b>판다쌤</b><div>${DC.nl2br(x.reply)}</div></div></div>`).join('') + '</details>'
+    : '대화 없음';
+}
+
+// 판다쌤 켜기/끄기 + 하루 질문 한도: chatConfig = { open, dailyLimit }
+async function loadChatConfig() {
+  const c = (await DC.get('chatConfig').catch(() => null)) || {};
+  const open = c.open !== false;
+  document.getElementById('chatToggle').textContent = open ? '🐼 판다쌤 켜짐' : '💤 판다쌤 꺼짐';
+  document.getElementById('chatToggle').dataset.open = open ? '1' : '';
+  document.getElementById('chatLimit').value = c.dailyLimit || 40;
+}
+window.toggleChat = async function () {
+  const open = !document.getElementById('chatToggle').dataset.open;
+  await DC.put('chatConfig/open', open);
+  loadChatConfig();
+};
+window.saveChatLimit = async function () {
+  const v = parseInt(document.getElementById('chatLimit').value, 10);
+  if (!(v > 0 && v <= 500)) { alert('1~500 사이로 적어 주세요.'); return; }
+  await DC.put('chatConfig/dailyLimit', v);
+  loadChatConfig();
 };
 
 window.closeModal = function () { document.getElementById('modal').classList.remove('show'); renderGrid(); };

@@ -19,6 +19,7 @@
 
 <script src="session.js?v=4"></script>
 <script src="cg.js?v=4"></script>
+<script src="coach.js?v=2"></script>
 <script>
 const GAME = '<div class="concept"><h3>🐼 판다의 유전 (마인크래프트) 다시 보기</h3>' +
   '<div class="floor">' +
@@ -176,7 +177,7 @@ const GROUPS = [
 
 DC.start({ title: '🐼 판다로 확인하는 멘델의 유전법칙', subtitle: '활동 1 · 유전의 원리 분석·도출하기' }).then(() => {
   R.ban = DC.myBan();
-  DC.form({
+  const formApi = DC.form({
     mount: '#form', key: 'panda', groups: GROUPS, saveLabel: '💾 저장하기',
     required: ['q1', 'q2', 'q3', 'q4', 'q5'],
     validate: ans => {
@@ -192,6 +193,7 @@ DC.start({ title: '🐼 판다로 확인하는 멘델의 유전법칙', subtitle
     },
     onLoad: () => { loadTeam().then(() => loadResults(true)); },
   });
+  Coach.mount({ getDraft: () => formApi.values() });
   // 모둠원·다른 모둠이 결과를 저장하거나 선생님이 모둠을 배정하면 바로 반영
   // (실시간 연결은 1개만 — 모둠 배정은 10초마다 확인)
   const live = DC.listen('pandaResult', () => { loadResults(false); if (R.ready) loadTeam(); });
