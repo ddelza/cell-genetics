@@ -104,18 +104,29 @@ table.grid { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
 <script>
 const PASSWORD = 'byung0703!';
 
-// 채점 항목 — 이번 범위(유전 9 + 세포분열 9 = 18점). 성찰일지(6점)는 이후 추가.
+// 채점 항목 — 이번 범위(유전 10 + 세포분열 9 = 19점). 성찰일지(6점)는 이후 추가.
+// 판다 논술은 문항당 2점 × 5 = 10점. 실전(구글폼) 답으로 채점하고, 연습 답은 회색으로 참고만.
 const CRIT = [
-  { id: 'panda', label: '유전의 원리 분석·도출', short: '유전 원리', max: 9, src: 'panda',
-    rubric: [
-      ['모의 활동에 유전 법칙 적용하기 (3)', [[3, '모의 활동·사례 분석으로 멘델의 유전 법칙이 자손의 형질 결정에 어떻게 작용하는지 논리적 인과관계를 입증함'], [2, '개념은 이해하나 탐구 데이터와 연결하는 논리가 다소 개략적임'], [1, '개념 이해가 다소 부족하며 모의 활동과의 연결이 미흡함']]],
-      ['모의 활동 결과 해석하기 (2)', [[2, '수치 데이터를 정리하고 멘델의 유전 원리에 따른 기댓값과 비교하여 올바르게 분석함'], [1, '데이터를 정리했으나 수치의 확률적 경향성 분석이 다소 부족함']]],
-      ['가계도를 통한 유전자형 추론하기 (2)', [[2, '우열 관계를 판별하고 가족 구성원의 유전자형을 과학적 근거를 들어 완벽히 추론함'], [1, '유전자형을 도출했으나 추론 과정의 논리적 근거 설명이 개략적임'], [0, '우열 판별이 틀리거나 유전자형 추론 불가']]],
-      ['유전 현상 확률 계산하기 (2)', [[2, '2쌍 이상의 대립 형질 유전 시 특정 형질 확률을 독립의 법칙 등으로 정확히 도출함'], [1, '출현 가능성은 예측했으나 산출 과정이 타당하나 결과값에 일부 오차'], [0, '확률 계산 불가 또는 독립의 법칙 이해 못함']]],
-    ],
-    note: '판다 토의 5문항으로 9점을 한꺼번에 평가 (위 4개 세부 기준은 참고용)',
-    key: '① 둘 다 인정 — (가) 반 전체: 표본이 많을수록 우연에 의한 오차가 줄어 이론적인 비(3:1)에 가까워짐 / (나) 우리 모둠: 모둠 결과가 반 전체보다 실제로 3:1에 더 가까웠다면 그 비교를 근거로 모둠이 더 의미 있다고 해도 인정<br>② 검정 순종(BB) × 갈색 순종(bb) → 자손 1대는 모두 검정(Bb)<br>③ 검정이 갈색에 대해 우성 — 잡종에서는 우성 형질만 나타남(우열의 원리)<br>④ 결과만 쓰면 통과: 검정 잡종(Bb)끼리 교배 → 자손 2대 검정 : 갈색 ≈ 3 : 1 (반 전체 숫자·비율 있으면 더 좋음)<br>⑤ 둘 중 하나면 통과 — (가) 자손 2대 유전자형 BB, Bb, Bb, bb → 검정 : 갈색 = 3 : 1 / (나) 분리의 법칙: 생식세포가 형성될 때 대립유전자가 분리되어 서로 다른 생식세포로 들어감',
-    fields: [['counts', '모의 실험 결과'], ['q1', '1. 더 의미 있는 결과와 그 이유'], ['q2', '2. 어버이 순종 교배 설명'], ['q3', '3. 어버이 순종 교배로 추측할 수 있는 것'], ['q4', '4. 자손 1대 잡종 교배 설명(정수비 포함)'], ['q5', '5. 자손 2대 정수비의 의미']] },
+  { id: 'p1', label: '1. 더 의미 있는 결과와 그 이유', short: '판다1', max: 2, src: 'panda',
+    rubric: [['', [[2,"반 전체 또는 우리 모둠 중 하나를 고르고 타당한 근거를 제시함 — (가) 반 전체: 표본이 많을수록 우연의 영향이 줄어 기댓값(3:1)에 가까워짐 / (나) 우리 모둠: 두 결과의 비율을 계산해 모둠 쪽이 실제로 3:1에 더 가까웠음을 근거로 듦"],[1,"선택은 했으나 근거가 막연하거나 일부만 맞음 (예: \"수가 많아서\"만 쓰고 왜 그런지 없음, 비율 비교가 틀림)"],[0,"무응답이거나 근거가 없음"]]]],
+    key: '(가) 반 전체: 표본이 많을수록 우연에 의한 오차가 줄어 이론적인 비(3:1)에 가까워짐<br>(나) 우리 모둠: 모둠 결과가 반 전체보다 실제로 3:1에 더 가까웠다면 그 비교를 근거로 모둠이 더 의미 있다고 해도 인정',
+    fields: [["counts","모의 실험 결과"],["q1","1. 더 의미 있는 결과와 그 이유"]] },
+  { id: 'p2', label: '2. 어버이 순종 교배 설명', short: '판다2', max: 2, src: 'panda',
+    rubric: [['', [[2,"검정 순종(BB) × 갈색 순종(bb)을 교배하여 자손 1대가 모두 검정(Bb)으로 나왔음을 교배 대상과 결과 모두 정확히 설명함"],[1,"교배 대상과 결과 중 하나가 빠지거나 유전자형 표기에 오류가 있음"],[0,"무응답이거나 내용이 틀림"]]]],
+    key: '검정 순종(BB) × 갈색 순종(bb) → 자손 1대는 모두 검정(Bb)',
+    fields: [["q2","2. 어버이 순종 교배 설명"]] },
+  { id: 'p3', label: '3. 어버이 순종 교배로 추측할 수 있는 것', short: '판다3', max: 2, src: 'panda',
+    rubric: [['', [[2,"자손 1대가 갈색 유전자를 가졌는데도 모두 검정으로 나타난 것을 근거로 검정이 우성(갈색이 열성)임을 추론함"],[1,"우성·열성을 언급했으나 근거(자손 1대가 모두 검정)가 없거나 우열 관계 서술이 일부 부정확함"],[0,"무응답이거나 우열 관계를 반대로 씀"]]]],
+    key: '검정이 갈색에 대해 우성 — 잡종에서는 우성 형질만 나타남(우열의 원리)',
+    fields: [["q3","3. 어버이 순종 교배로 추측할 수 있는 것"]] },
+  { id: 'p4', label: '4. 자손 1대 잡종 교배 설명(정수비 포함)', short: '판다4', max: 2, src: 'panda',
+    rubric: [['', [[2,"검정 잡종(Bb)끼리 교배하여 자손 2대에서 검정 : 갈색이 약 3 : 1로 나왔음을 씀 (결과만 써도 만점, 반 전체 숫자·비율이 있으면 더 좋음)"],[1,"교배 대상 또는 정수비 중 하나가 빠지거나 비율이 부정확함"],[0,"무응답이거나 결과가 틀림"]]]],
+    key: '검정 잡종(Bb)끼리 교배 → 자손 2대 검정 : 갈색 ≈ 3 : 1',
+    fields: [["q4","4. 자손 1대 잡종 교배 설명(정수비 포함)"]] },
+  { id: 'p5', label: '5. 자손 2대 정수비의 의미', short: '판다5', max: 2, src: 'panda',
+    rubric: [['', [[2,"다음 중 하나를 정확히 씀 — (가) 자손 2대 유전자형이 BB, Bb, Bb, bb로 나와 검정 : 갈색 = 3 : 1이 됨 / (나) 분리의 법칙: 생식세포가 형성될 때 대립유전자가 분리되어 서로 다른 생식세포로 들어감"],[1,"(가) 또는 (나)를 언급했으나 경우의 수나 정의가 불완전·부정확함"],[0,"무응답이거나 정수비의 의미와 관계없는 내용"]]]],
+    key: '둘 중 하나면 만점 — (가) BB, Bb, Bb, bb → 검정 : 갈색 = 3 : 1 / (나) 생식세포가 형성될 때 대립유전자가 분리되어 서로 다른 생식세포로 들어감(분리의 법칙)',
+    fields: [["q5","5. 자손 2대 정수비의 의미"]] },
   { id: 'media', label: '매체 활용의 적절성 설명하기', short: '매체 활용', max: 2, src: 'essay',
     rubric: [['', [[2, '매체가 분열 과정 설명에 적절한 이유를 과학적으로 제시 + 모형과 실제 세포 분열의 차이점(한계점)을 명확히 설명'], [1, '매체 선택 이유는 제시했으나 실제 현상과의 차이점 설명이 부족·추상적'], [0, '매체 활용 설명이나 실제 현상과의 비교 분석이 거의 없음']]]],
     fields: [['mySlot', '우리 모둠'], ['q1Why', '① 매체가 적절한 이유'], ['q1Limit', '② 실제 현상과의 차이점(한계점)']] },
@@ -288,7 +299,7 @@ window.openStu = function (i) {
     h += `<div class="sec"><h4>${title} ${rec ? `<span class="dc-muted" style="font-weight:400">· 저장 ${DC.fmtTime(rec.updatedAt)}${src === 'panda' && (a.team || a.role) ? ` · ${a.team ? DC.esc(a.team) + '모둠' : ''} ${DC.esc([].concat(a.role || []).join(', '))}` : ''}${src === 'essay' && a.mySlot ? ` · ${DC.esc(DC.slotLabel(a.mySlot))}` : ''}</span>` : '<span style="color:var(--danger)">· 미제출</span>'}</h4>`;
     CRIT.filter(c => c.src === src).forEach(c => {
       h += '<div class="crit"><div class="ans">' + c.fields.map(([f, l]) => src === 'panda' ? pandaField(s.id, f, l, a) : `<b>${DC.esc(l)}</b>${ansText(f === 'mySlot' && a[f] ? DC.slotLabel(a[f]) : a[f])}`).join('') +
-        (src === 'panda' ? `<b>연습 전체 피드백</b>${fbBox(s.id, 'all')}` : '') + '</div>' +
+        (c.id === 'p5' ? `<b>연습 전체 피드백</b>${fbBox(s.id, 'all')}` : '') + '</div>' +
         `<div class="scorebox"><div class="ttl">${DC.esc(c.label)} <span class="dc-muted">/${c.max}</span></div>` +
         `<div class="pts" data-crit="${c.id}">` + Array.from({ length: c.max + 1 }, (_, p) => `<button class="${has(sc[c.id]) && +sc[c.id] === p ? 'on' : ''}" onclick="setScore('${c.id}',${p})">${p}</button>`).join('') +
         `<button class="clear" onclick="setScore('${c.id}',null)">지우기</button></div>` +
@@ -379,15 +390,15 @@ document.addEventListener('keydown', e => {
 
 window.exportCsv = function () {
   const q = v => '"' + String(v === undefined || v === null ? '' : v).replace(/"/g, '""') + '"';
-  const pandaCount = v => v && typeof v === 'object' ? ['g', 'c', 's'].map(k => `${v[k + 'b'] ?? ''}/${v[k + 'r'] ?? ''}`) : ['', '', ''];
   const head = ['학번', '번호', '이름', ...CRIT.map(c => `${c.short}(${c.max})`), `합계(${MAX_TOTAL})`, '메모',
-    '판다:모둠', '판다:역할', '모둠 검정/갈색', '반 검정/갈색', '전교 검정/갈색', '판다:1', '판다:2', '판다:3', '판다:4', '판다:5',
+    '판다 실전 제출', '판다:역할', '모둠 검정/갈색', '반 검정/갈색', '실전1', '실전2', '실전3', '실전4', '실전5', '연습1', '연습2', '연습3', '연습4', '연습5',
     '논술:모둠', '모둠 매체', '모둠 분열', '1-①적절한 이유', '1-②한계점', '문항2 매체', '2-①체세포', '2-②감수', '3.비교·분석'];
   const lines = [head.map(q).join(',')];
   list.forEach(s => {
-    const sc = scores[s.id] || {}, pa = (panda[s.id] || {}).answers || {}, ea = (essay[s.id] || {}).answers || {};
+    const sc = scores[s.id] || {}, pa = (panda[s.id] || {}).answers || {}, ea = (essay[s.id] || {}).answers || {}, ra = real[s.id] || {}, rc = ra.counts || {};
     lines.push([s.id, s.num, s.name, ...CRIT.map(c => sc[c.id]), graded(sc) ? total(sc) : '', sc.memo,
-      pa.team, [].concat(pa.role || []).join(', '), ...pandaCount(pa.counts), pa.q1, pa.q2, pa.q3, pa.q4, pa.q5,
+      ra.ts ? DC.fmtTime(ra.ts) : '', ra.role || [].concat(pa.role || []).join(', '), rc.gb !== undefined ? `${rc.gb}/${rc.gr}` : '', rc.cb !== undefined ? `${rc.cb}/${rc.cr}` : '',
+      ra.q1, ra.q2, ra.q3, ra.q4, ra.q5, pa.q1, pa.q2, pa.q3, pa.q4, pa.q5,
       DC.slot(ea.mySlot) ? DC.slot(ea.mySlot).no + '모둠' : '', ea.myMedia, ea.myDivision, ea.q1Why, ea.q1Limit, ea.otherMedia, ea.q2Mitosis, ea.q2Meiosis, ea.q3].map(q).join(','));
   });
   const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
