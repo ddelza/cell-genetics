@@ -51,6 +51,13 @@ table.grid { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
 .rub i { font-style: normal; font-weight: 700; color: var(--accent); }
 .key { font-size: 0.74rem; line-height: 1.55; background: #fff9db; border-radius: 8px; padding: 6px 8px; margin-top: 6px; color: #6b5800; }
 .savestate { font-size: 0.74rem; color: var(--text-muted); }
+.ans .tag { display: inline-block; font-size: 0.68rem; font-weight: 700; border-radius: 6px; padding: 0 6px; margin: 2px 0; }
+.ans .tag.real { background: var(--accent-soft); color: var(--accent); }
+.ans .tag.prac { background: #f1f3f5; color: #999; }
+.ans .prac div { color: #9a9a9a; font-size: 0.8rem; }
+.ans .nosub { color: var(--danger); font-size: 0.78rem; }
+.fbin { width: 100%; margin-top: 4px; padding: 6px 8px; border: 1.5px dashed #a5d8ff; border-radius: 8px; font-family: inherit; font-size: 0.8rem; resize: vertical; min-height: 34px; background: #f8fbff; }
+.fbin.saved { border-color: #1c7ed6; border-style: solid; }
 .chatrow { border-top: 1px dashed #dde3ea; padding: 6px 0; font-size: 0.82rem; line-height: 1.55; color: var(--text); }
 .chatrow b { color: var(--accent); font-size: 0.74rem; }
 .chatrow span { color: var(--text-muted); font-size: 0.7rem; }
@@ -127,6 +134,33 @@ const CRIT = [
 const MAX_TOTAL = CRIT.reduce((s, c) => s + c.max, 0);
 
 let roster = {}, panda = {}, essay = {}, scores = {}, curBan = '', list = [], curIdx = -1;
+// 판다 실전 = 구글폼(시험 모드) 응답 시트를 Apps Script(판다쌤 웹앱 ?action=essays)로 읽는다. 연습 = panda.html(Firebase)
+const ESSAY_URL = 'https://script.google.com/macros/s/AKfycby5omdOfIpwg5KlOCwMS5L5zwbfZuF97qz8LyW-MUQWnKer11zBdh0CgAs-cPJ8CeH4/exec';
+let real = {}, realInfo = '', pfb = {}; // real: 학번 → { counts:{gb,gr,cb,cr}, q1~q5, team, role, ts }, pfb: 학번 → 연습 피드백
+async function loadReal() {
+  try {
+    const r = await fetch(ESSAY_URL + '?action=essays&pw=' + encodeURIComponent(PASSWORD)).then(x => x.json());
+    if (!r.ok) throw new Error(r.error || '불러오기 실패');
+    const H = r.header, col = re => H.findIndex(h => re.test(h));
+    const C = { sid: col(/학번/), name: col(/이름/), team: col(/모둠\s*번호/), role: col(/역할/), email: col(/이메일|email/i),
+      gb: col(/우리\s*모둠.*검정/), gr: col(/우리\s*모둠.*갈색/), cb: col(/반\s*전체.*검정/), cr: col(/반\s*전체.*갈색/) };
+    [1, 2, 3, 4, 5].forEach(n => { C['q' + n] = col(new RegExp('^\\s*' + n + '\\s*[.)]')); });
+    const out = {};
+    r.rows.forEach(row => {
+      const g = k => C[k] >= 0 ? String(row[C[k]] ?? '').trim() : '';
+      let sid = g('sid').replace(/\D/g, '');
+      if (sid.length !== 4) sid = (g('email').match(/\d{4}/) || [''])[0];
+      if (sid.length !== 4) return;
+      const ts = typeof row[0] === 'number' ? row[0] : 0;
+      if (out[sid] && out[sid].ts > ts) return; // 여러 번 냈으면 마지막 것
+      out[sid] = { ts, name: g('name'), team: g('team'), role: g('role'), q1: g('q1'), q2: g('q2'), q3: g('q3'), q4: g('q4'), q5: g('q5'),
+        counts: { gb: g('gb'), gr: g('gr'), cb: g('cb'), cr: g('cr') } };
+    });
+    real = out;
+    const miss = Object.keys(C).filter(k => C[k] < 0 && k !== 'email' && k !== 'name');
+    realInfo = `실전 ${Object.keys(out).length}명${miss.length ? ` (못 찾은 열: ${miss.join(', ')})` : ''}`;
+  } catch (e) { real = {}; realInfo = '실전 불러오기 실패: ' + e.message; }
+}
 
 window.checkPw = function () {
   if (document.getElementById('pwInput').value !== PASSWORD) {
@@ -165,9 +199,9 @@ async function init() {
 window.loadClass = async function () {
   curBan = document.getElementById('banSelect').value;
   document.getElementById('loadInfo').textContent = '불러오는 중...';
-  const [p, e, s] = await Promise.all(['panda', 'essay', 'scores'].map(k => DC.get(`${k}/${curBan}`).catch(() => null)));
-  panda = p || {}; essay = e || {}; scores = s || {};
-  document.getElementById('loadInfo').textContent = `불러옴 ${new Date().toLocaleTimeString()}`;
+  const [p, e, s, f] = await Promise.all(['panda', 'essay', 'scores', 'pandaFb'].map(k => DC.get(`${k}/${curBan}`).catch(() => null)).concat([loadReal()]));
+  panda = p || {}; essay = e || {}; scores = s || {}; pfb = f || {};
+  document.getElementById('loadInfo').textContent = `불러옴 ${new Date().toLocaleTimeString()} · ${realInfo}`;
   list = students();
   renderGrid();
 };
@@ -185,13 +219,14 @@ function total(sc) { return sc ? CRIT.reduce((s, c) => s + (has(sc[c.id]) ? +sc[
 function graded(sc) { return sc ? CRIT.filter(c => has(sc[c.id])).length : 0; }
 
 function renderGrid() {
-  let h = '<tr><th>번호</th><th>이름</th><th>판다<br>제출</th><th>논술<br>제출</th><th>모둠<small>매체·분열 → 문항2</small></th>' +
+  let h = '<tr><th>번호</th><th>이름</th><th>판다<br>실전</th><th>판다<br>연습</th><th>논술<br>제출</th><th>모둠<small>매체·분열 → 문항2</small></th>' +
     CRIT.map(c => `<th>${c.short}<small>/${c.max}</small></th>`).join('') + `<th>합계<small>/${MAX_TOTAL}</small></th><th>메모</th></tr>`;
   list.forEach((s, i) => {
     const p = panda[s.id], e = essay[s.id], sc = scores[s.id];
     const ea = e && e.answers || {};
     h += `<tr class="stu" onclick="openStu(${i})"><td>${s.num || ''}</td><td class="name">${DC.esc(s.name)}</td>` +
-      (p ? `<td class="done" title="${DC.fmtTime(p.updatedAt)}">✓</td>` : '<td class="miss">·</td>') +
+      (real[s.id] ? `<td class="done" title="${DC.fmtTime(real[s.id].ts)}">✓</td>` : '<td class="miss">·</td>') +
+      (p ? `<td class="done" style="color:#aaa" title="${DC.fmtTime(p.updatedAt)}">✓</td>` : '<td class="miss">·</td>') +
       (e ? `<td class="done" title="${DC.fmtTime(e.updatedAt)}">✓</td>` : '<td class="miss">·</td>') +
       `<td title="${DC.escAttr(DC.slotLabel(ea.mySlot))}">${e ? `${DC.MEDIA_ICON[ea.myMedia] || ''}${DC.DIV_ICON[ea.myDivision] || ''}→${DC.MEDIA_ICON[ea.otherMedia] || ''}` : ''}</td>` +
       CRIT.map(c => sc && has(sc[c.id]) ? `<td class="sc">${sc[c.id]}</td>` : '<td class="sc empty">-</td>').join('') +
@@ -199,9 +234,31 @@ function renderGrid() {
   });
   const cnt = d => list.filter(s => d[s.id]).length;
   const avg = c => { const v = list.map(s => scores[s.id]).filter(sc => sc && has(sc[c.id])).map(sc => +sc[c.id]); return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(1) : '-'; };
-  h += `<tr class="sum"><td></td><td class="name">${list.length}명</td><td>${cnt(panda)}</td><td>${cnt(essay)}</td><td></td>` +
+  h += `<tr class="sum"><td></td><td class="name">${list.length}명</td><td>${cnt(real)}</td><td>${cnt(panda)}</td><td>${cnt(essay)}</td><td></td>` +
     CRIT.map(c => `<td title="평균">${avg(c)}</td>`).join('') + '<td></td><td></td></tr>';
   document.getElementById('grid').innerHTML = h;
+}
+
+// 판다 문항 한 칸: 실전(구글폼) 답은 보통 글씨, 연습(panda.html) 답은 회색 + 연습 피드백 입력칸
+function pandaField(id, f, l, prac) {
+  const r = real[id];
+  return `<b>${DC.esc(l)}</b>` +
+    (r ? `<span class="tag real">실전</span>${ansText(r[f])}` : '<div class="nosub">실전 미제출</div>') +
+    `<div class="prac"><span class="tag prac">연습</span>${ansText(prac[f])}</div>` + fbBox(id, f);
+}
+function fbBox(id, f) {
+  const v = ((pfb[id] || {})[f] || {}).text || '';
+  return `<textarea class="fbin${v ? ' saved' : ''}" data-fb="${f}" rows="1" placeholder="연습 피드백 (칸을 벗어나면 저장 · 학생 연습 페이지에 보여요)">${DC.esc(v)}</textarea>`;
+}
+async function saveFb(el) {
+  const id = list[curIdx].id, f = el.dataset.fb, text = el.value.trim(), path = `pandaFb/${curBan}/${id}/${f}`;
+  try {
+    if (text) await DC.put(path, { text, updatedAt: Date.now() }); else await DC.del(path);
+    pfb[id] = pfb[id] || {};
+    if (text) pfb[id][f] = { text, updatedAt: Date.now() }; else delete pfb[id][f];
+    el.classList.toggle('saved', !!text);
+    document.getElementById('saveState').textContent = `피드백 저장됨 ${new Date().toLocaleTimeString()}`;
+  } catch (e) { alert('피드백 저장 실패: ' + e.message); }
 }
 
 function ansText(v) {
@@ -224,9 +281,14 @@ window.openStu = function (i) {
     `<button class="btn small secondary" onclick="closeModal()">닫기</button></div>`;
   [['panda', '🐼 활동 1 · 판다로 확인하는 멘델의 유전법칙'], ['essay', '🔬 활동 2 · 세포분열 표현하기 개인 논술']].forEach(([src, title]) => {
     const rec = recs[src], a = rec && rec.answers || {};
+    if (src === 'panda') {
+      const rr = real[s.id];
+      h += `<div class="sec"><h4>${title} <span class="dc-muted" style="font-weight:400">· ${rr ? `실전 제출 ${DC.fmtTime(rr.ts)}` : '<span style="color:var(--danger)">실전 미제출</span>'} · ${rec ? `연습 저장 ${DC.fmtTime(rec.updatedAt)}` : '연습 없음'}${a.team || a.role ? ` · ${a.team ? DC.esc(a.team) + '모둠' : ''} ${DC.esc([].concat(a.role || []).join(', '))}` : ''}</span></h4>`;
+    } else
     h += `<div class="sec"><h4>${title} ${rec ? `<span class="dc-muted" style="font-weight:400">· 저장 ${DC.fmtTime(rec.updatedAt)}${src === 'panda' && (a.team || a.role) ? ` · ${a.team ? DC.esc(a.team) + '모둠' : ''} ${DC.esc([].concat(a.role || []).join(', '))}` : ''}${src === 'essay' && a.mySlot ? ` · ${DC.esc(DC.slotLabel(a.mySlot))}` : ''}</span>` : '<span style="color:var(--danger)">· 미제출</span>'}</h4>`;
     CRIT.filter(c => c.src === src).forEach(c => {
-      h += '<div class="crit"><div class="ans">' + c.fields.map(([f, l]) => `<b>${DC.esc(l)}</b>${ansText(f === 'mySlot' && a[f] ? DC.slotLabel(a[f]) : a[f])}`).join('') + '</div>' +
+      h += '<div class="crit"><div class="ans">' + c.fields.map(([f, l]) => src === 'panda' ? pandaField(s.id, f, l, a) : `<b>${DC.esc(l)}</b>${ansText(f === 'mySlot' && a[f] ? DC.slotLabel(a[f]) : a[f])}`).join('') +
+        (src === 'panda' ? `<b>연습 전체 피드백</b>${fbBox(s.id, 'all')}` : '') + '</div>' +
         `<div class="scorebox"><div class="ttl">${DC.esc(c.label)} <span class="dc-muted">/${c.max}</span></div>` +
         `<div class="pts" data-crit="${c.id}">` + Array.from({ length: c.max + 1 }, (_, p) => `<button class="${has(sc[c.id]) && +sc[c.id] === p ? 'on' : ''}" onclick="setScore('${c.id}',${p})">${p}</button>`).join('') +
         `<button class="clear" onclick="setScore('${c.id}',null)">지우기</button></div>` +
@@ -244,6 +306,7 @@ window.openStu = function (i) {
   const memo = document.getElementById('memoIn');
   memo.addEventListener('change', () => saveScores({ memo: memo.value.trim() }));
   memo.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) memo.blur(); });
+  document.querySelectorAll('#modalBody .fbin').forEach(el => el.addEventListener('change', () => saveFb(el)));
   loadChat(s.id);
 };
 

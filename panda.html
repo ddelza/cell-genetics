@@ -8,12 +8,19 @@
 <style>
 .floor { display: grid; grid-template-columns: 64px 1fr; gap: 4px 10px; font-size: 0.82rem; line-height: 1.55; margin: 8px 0; }
 .floor b { color: var(--accent); }
+.cg-practice-note { background: #fff9db; border: 1.5px solid #ffe066; border-radius: 12px; padding: 10px 14px; font-size: 0.86rem; line-height: 1.6; margin-bottom: 12px; }
+.cg-fb { margin-top: 6px; background: #e7f5ff; border-left: 4px solid #1c7ed6; border-radius: 8px; padding: 7px 10px; font-size: 0.84rem; line-height: 1.55; white-space: pre-wrap; }
+.cg-fb b { color: #1864ab; }
+.cg-fb-sum { background: #e7f5ff; border-radius: 12px; padding: 9px 14px; font-size: 0.86rem; margin-bottom: 12px; color: #1864ab; }
 .gene { font-family: Consolas, monospace; font-weight: 700; background: #f2f4fa; border-radius: 4px; padding: 0 4px; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <div id="dc-head"></div>
+  <div class="cg-practice-note">✏️ <b>여기는 연습장이에요.</b> 여기에 쓴 답은 점수에 들어가지 않고, 선생님이 읽고 <b>피드백</b>을 달아 주세요.<br>
+    실제 점수는 수업 시간에 <b>구글폼 실전 논술(시험 모드)</b>로 매겨요. 실전에서는 판다쌤과 이 페이지를 볼 수 없으니, 연습하면서 내 말로 정리해 두세요.</div>
+  <div id="fbSummary"></div>
   <div id="form"></div>
 </div>
 
@@ -129,6 +136,27 @@ async function saveTeamResult() {
   } finally { btn.disabled = false; }
 }
 
+// 선생님 피드백: pandaFb/{반}/{학번}/{q1~q5|counts|all} = { text, updatedAt } (teacher.html에서 작성)
+const FB_LABEL = { counts: '모의 실험 결과', q1: '1번', q2: '2번', q3: '3번', q4: '4번', q5: '5번', all: '전체' };
+async function showFeedback() {
+  const fb = (await DC.get(`pandaFb/${DC.myBan()}/${DC.student.id}`).catch(() => null)) || {};
+  const keys = Object.keys(fb).filter(k => fb[k] && fb[k].text);
+  document.getElementById('fbSummary').innerHTML = keys.length
+    ? `<div class="cg-fb-sum">💬 선생님 피드백이 <b>${keys.length}개</b> 있어요. 각 문항 아래 파란 상자를 확인하세요.${fb.all && fb.all.text ? `<div class="cg-fb" style="margin-top:6px"><b>전체</b> · ${DC.fmtTime(fb.all.updatedAt)}
+${DC.esc(fb.all.text)}</div>` : ''}</div>` : '';
+  keys.filter(k => k !== 'all').forEach(k => {
+    const box = k === 'counts' ? document.getElementById('resultBox') : document.querySelector(`[data-fid="${k}"]`);
+    if (!box) return;
+
+    const d = document.createElement('div');
+    d.className = 'cg-fb';
+    d.innerHTML = `<b>💬 선생님 피드백 (${FB_LABEL[k]})</b> · ${DC.fmtTime(fb[k].updatedAt)}
+${DC.esc(fb[k].text)}`;
+    if (k === 'counts') box.insertAdjacentElement('afterend', d); // resultBox 안은 결과표가 다시 그려지므로 바깥에
+    else (box.closest('.cg-q') || box.parentElement).appendChild(d);
+  });
+}
+
 async function loadTeam() {
   const t = (await DC.get(`pandaTeam/${R.ban}`).catch(() => null)) || {};
   const my = t[DC.student.id];
@@ -175,10 +203,10 @@ const GROUPS = [
   ] },
 ];
 
-DC.start({ title: '🐼 판다로 확인하는 멘델의 유전법칙', subtitle: '활동 1 · 유전의 원리 분석·도출하기' }).then(() => {
+DC.start({ title: '🐼 판다로 확인하는 멘델의 유전법칙', subtitle: '활동 1 · 연습장 (실전은 구글폼 시험 모드)' }).then(() => {
   R.ban = DC.myBan();
   const formApi = DC.form({
-    mount: '#form', key: 'panda', groups: GROUPS, saveLabel: '💾 저장하기',
+    mount: '#form', key: 'panda', groups: GROUPS, saveLabel: '💾 연습 저장하기',
     required: ['q1', 'q2', 'q3', 'q4', 'q5'],
     validate: ans => {
       const gb = document.getElementById('rgB'), gr = document.getElementById('rgR');
@@ -191,7 +219,7 @@ DC.start({ title: '🐼 판다로 확인하는 멘델의 유전법칙', subtitle
         sb: t.school.n ? t.school.b : '', sr: t.school.n ? t.school.r : '', sn: t.school.n };
       return '';
     },
-    onLoad: () => { loadTeam().then(() => loadResults(true)); },
+    onLoad: () => { loadTeam().then(() => loadResults(true)); showFeedback(); },
   });
   Coach.mount({ getDraft: () => formApi.values() });
   // 모둠원·다른 모둠이 결과를 저장하거나 선생님이 모둠을 배정하면 바로 반영
