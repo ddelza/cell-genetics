@@ -177,6 +177,24 @@ function setupKeySheet() {
 }
 function clearKeyCache() { CacheService.getScriptCache().removeAll(['keys', 'prompt']); }
 
+// 하루 한도는 미국 태평양 시각 자정에 풀린다 (한국 시각 오후 4시, 겨울엔 오후 5시) → 그때까지만 쉬게 한다 (캐시 최대 6시간)
+function secsToQuotaReset() {
+  const now = new Date();
+  const pt = Utilities.formatDate(now, 'America/Los_Angeles', 'HH:mm:ss').split(':').map(Number);
+  const left = 86400 - (pt[0] * 3600 + pt[1] * 60 + pt[2]) + 60; // 1분 여유
+  return Math.max(60, Math.min(21600, left));
+}
+
+// 한도에 걸려 쉬는 중인 키·모델 표시를 모두 지운다 (키를 새로 넣었거나 한도가 풀렸는데 계속 "바빠요"일 때 편집기에서 실행)
+function clearCooldowns() {
+  const props = PropertiesService.getScriptProperties();
+  const models = (props.getProperty('GEMINI_MODELS') || DEFAULT_MODELS.join(',')).split(',').map(x => x.trim()).filter(Boolean);
+  const ks = [];
+  loadKeys().forEach(k => { ks.push('cool:' + k.tag + ':*'); models.forEach(m => ks.push('cool:' + k.tag + ':' + m)); });
+  CacheService.getScriptCache().removeAll(ks.concat(['keys']));
+  Logger.log('쉬는 표시 ' + ks.length + '개 지움');
+}
+
 // 시스템 프롬프트는 키 시트의 "prompt" 탭 A1 칸에서 읽는다 (5분 캐시) → 프롬프트를 고칠 때 재배포가 필요 없다.
 // 탭이 없으면 아래 SYSTEM_PROMPT 기본값으로 만들어 둔다. A1을 비우면 기본값을 쓴다.
 const PROMPT_SHEET = 'prompt';
@@ -275,7 +293,7 @@ function callGemini(systemText, contents) {
       if (code === 429) {
         const daily = /per.?day|PerDay|daily/i.test(body);
         const delay = (body.match(/"retryDelay":\s*"(\d+)/) || [])[1];
-        cache.put('cool:' + k.tag + ':' + model, '1', daily ? 21600 : Math.min(300, Math.max(20, Number(delay) || 60)));
+        cache.put('cool:' + k.tag + ':' + model, '1', daily ? secsToQuotaReset() : Math.min(300, Math.max(20, Number(delay) || 60)));
         if (daily) markKey(k, model + ' 하루 한도', false);
       } else if (code === 404 || /limit: 0/.test(body)) {
         cache.put('cool:' + k.tag + ':' + model, '1', 21600);
