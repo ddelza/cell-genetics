@@ -2,7 +2,7 @@
 // 서버: gas/Code.gs (Apps Script 웹앱). 대화 기록은 서버가 cellgen/chatLog/{반}/{학번}에 남기고, 여기서는 읽기만 한다.
 // 사용: Coach.mount({ getDraft: () => ({ q1, ..., q5 }) })
 (function () {
-  var CHAT_URL = ''; // Apps Script 웹앱 배포 URL (…/exec)
+  var CHAT_URL = 'https://script.google.com/macros/s/AKfycby5omdOfIpwg5KlOCwMS5L5zwbfZuF97qz8LyW-MUQWnKer11zBdh0CgAs-cPJ8CeH4/exec'; // Apps Script 웹앱 배포 URL (…/exec)
 
   var css = '' +
     '.pc-fab{position:fixed;right:16px;bottom:16px;z-index:60;border:none;border-radius:999px;padding:12px 18px;background:var(--accent);color:#fff;font-weight:700;font-size:0.95rem;font-family:inherit;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer}' +
@@ -80,9 +80,13 @@
         try { var v = opts.getDraft() || {}; ['q1', 'q2', 'q3', 'q4', 'q5'].forEach(function (k) { draft[k] = v[k] || ''; }); } catch (e) {}
         var body = JSON.stringify({ id: DC.student.id, name: DC.student.name, q: curQ, message: msg, draft: draft });
         // 서버의 모든 키가 한도에 걸렸으면(busy) 15초·30초·45초 기다렸다가 같은 질문을 자동으로 다시 보낸다
-        function attempt(n) {
+        function post(retry) { // 와이파이가 잠깐 끊긴 경우를 위해 연결 실패는 3초 뒤 한 번 더
           return fetch(CHAT_URL, { method: 'POST', body: body }) // text/plain이라 사전 요청(CORS preflight) 없이 Apps Script로 바로 간다
-            .then(function (r) { return r.json(); }).then(function (res) {
+            .then(function (r) { return r.json(); })
+            .catch(function (e) { if (retry) throw e; return new Promise(function (ok) { setTimeout(ok, 3000); }).then(function () { return post(true); }); });
+        }
+        function attempt(n) {
+          return post(false).then(function (res) {
               if (!res.ok && res.busy && n < 3) {
                 var sec = 15 * (n + 1);
                 wait.textContent = '판다쌤이 지금 바빠요 😅 ' + sec + '초 뒤 자동으로 다시 보낼게요…';
