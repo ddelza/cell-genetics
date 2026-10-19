@@ -157,7 +157,7 @@ async function loadReal() {
         counts: { gb: g('gb'), gr: g('gr'), cb: g('cb'), cr: g('cr') } };
     });
     real = out;
-    const miss = Object.keys(C).filter(k => C[k] < 0 && k !== 'email' && k !== 'name');
+    const miss = Object.keys(C).filter(k => C[k] < 0 && !['email', 'name', 'team'].includes(k)); // 모둠 번호는 폼에서 뺐으므로 없어도 됨
     realInfo = `실전 ${Object.keys(out).length}명${miss.length ? ` (못 찾은 열: ${miss.join(', ')})` : ''}`;
   } catch (e) { real = {}; realInfo = '실전 불러오기 실패: ' + e.message; }
 }
