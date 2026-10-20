@@ -21,7 +21,9 @@
  * 스크립트 속성(선택): GEMINI_MODELS = 쉼표로 구분한 모델 ID (기본 gemini-3.5-flash,gemini-3.5-flash-lite)
  */
 const DB = 'https://gwangsu-on-default-rtdb.firebaseio.com';
-const DEFAULT_MODELS = ['gemini-3.5-flash', 'gemini-3.5-flash-lite'];
+// 품질 좋은 순서. 무료 한도는 모델마다 따로라서 예비 모델을 두면 하루에 더 많이 답할 수 있다.
+// 이 키에서 못 쓰는 모델(404)은 자동으로 6시간 건너뛴다.
+const DEFAULT_MODELS = ['gemini-3.5-flash', 'gemini-3-flash', 'gemini-2.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-2.5-flash-lite'];
 const TEACHER = { id: '3000', name: '김병선' };
 const HISTORY_TURNS = 12;      // 이어서 보내는 이전 대화 (질문+답 쌍)
 const MAX_MSG = 1500;          // 학생 메시지 최대 글자 수
@@ -185,7 +187,7 @@ function resetKeyStatus() {
   Logger.log('키 상태를 초기화했어요. 사용(체크)된 키 ' + loadKeys().length + '개');
 }
 
-function clearKeyCache() { CacheService.getScriptCache().removeAll(['keys', 'prompt', 'limits']); }
+function clearKeyCache() { CacheService.getScriptCache().removeAll(['keys', 'prompt']); }
 
 // 하루 한도는 미국 태평양 시각 자정에 풀린다 (한국 시각 오후 4시, 겨울엔 오후 5시) → 그때까지만 쉬게 한다 (캐시 최대 6시간)
 function secsToQuotaReset() {
@@ -255,25 +257,27 @@ function loadKeys() {
 }
 
 // 키 상태를 시트에 남긴다 (실패해도 답변에는 영향 없게)
-// 키 시트 열: D 상태 | E flash 오늘 호출 | F 날짜 | G 키 끝 6자리 | H flash-lite 오늘 호출
-// E·H 칸은 "3 / 20"처럼 "쓴 횟수 / 하루 한도"로 쓴다. 한도는 1행 머리글의 "(한도 20)" 숫자를 읽으므로
-// 실제 한도를 알게 되면 머리글 숫자만 고치면 된다 ("한도 ?"면 횟수만 표시).
-const MODEL_COL = model => /lite/.test(model) ? 8 : 5; // H : E
-function keyLimits(sh) {
-  const cache = CacheService.getScriptCache();
-  const hit = cache.get('limits');
-  if (hit) return JSON.parse(hit);
-  let h = sh.getRange(1, 5, 1, 4).getValues()[0]; // E1..H1
-  if (!/한도/.test(String(h[0])) || !/한도/.test(String(h[3]))) {
-    sh.getRange('E1').setValue('flash 오늘 (한도 20)');
-    sh.getRange('H1').setValue('flash-lite 오늘 (한도 ?)');
-    sh.getRange('E1:H1').setFontWeight('bold');
-    h = ['flash 오늘 (한도 20)', '', '', 'flash-lite 오늘 (한도 ?)'];
-  }
-  const lim = s => Number((String(s).match(/한도\s*(\d+)/) || [])[1]) || 0;
-  const out = { 5: lim(h[0]), 8: lim(h[3]) };
-  cache.put('limits', JSON.stringify(out), KEY_CACHE_SEC);
-  return out;
+// 키 시트 열: D 상태 | E 오늘 모델별 호출 | F 날짜 | G 키 끝 6자리
+// E 칸은 "3.5-flash 4/20 · 2.5-flash 1/20 · 3.1-flash-lite 12/500"처럼 오늘 쓴 모델만 "쓴 횟수/하루 한도"로 쓴다.
+// 하루 한도는 AI Studio > 비율 제한(무료 등급, RPD)에서 확인한 값 (2026-10-20). 0이면 모름 → 횟수만 표시.
+const MODEL_LIMITS = { 'gemini-3.5-flash': 20, 'gemini-3-flash': 20, 'gemini-2.5-flash': 20,
+  'gemini-3.5-flash-lite': 0, 'gemini-3.1-flash-lite': 500, 'gemini-2.5-flash-lite': 20 };
+const shortModel = m => String(m).replace(/^gemini-/, '');
+function parseUsage(s) { // "3.5-flash 4/20 소진 · ..." → { '3.5-flash': { n: 4, out: true } }
+  const o = {};
+  const legacy = String(s).trim().match(/^(\d+)(?:\s*\/\s*\d+)?(\s*소진)?$/); // 이전 형식("3", "4 / 20 소진")은 flash 횟수
+  if (legacy) return { '3.5-flash': { n: Number(legacy[1]), out: !!legacy[2] } };
+  String(s || '').split('·').forEach(p => {
+    const m = p.trim().match(/^(\S+)\s+(\d+)(?:\/\d+)?(\s*소진)?/);
+    if (m) o[m[1]] = { n: Number(m[2]), out: !!m[3] };
+  });
+  return o;
+}
+function usageText(o) {
+  return Object.keys(o).map(name => {
+    const lim = MODEL_LIMITS['gemini-' + name];
+    return name + ' ' + o[name].n + (lim ? '/' + lim : '') + (o[name].out ? ' 소진' : '');
+  }).join(' · ');
 }
 
 // exhausted: 이 모델의 하루 한도를 다 썼다는 응답을 받음
@@ -281,22 +285,27 @@ function markKey(k, status, countUp, model, exhausted) {
   try {
     const id = PropertiesService.getScriptProperties().getProperty('KEY_SHEET_ID');
     const sh = SpreadsheetApp.openById(id).getSheetByName(KEY_SHEET);
+    if (!/모델별/.test(String(sh.getRange('E1').getValue()))) {
+      sh.getRange('E1').setValue('오늘 모델별 호출 (쓴/하루 한도)').setFontWeight('bold');
+      sh.getRange('H1').clearContent();
+    }
     const today = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd');
-    const cur = sh.getRange(k.row, 4, 1, 5).getValues()[0]; // D, E, F, G, H
+    const cur = sh.getRange(k.row, 4, 1, 4).getValues()[0]; // D, E, F, G
     // A열 키를 바꿔 넣었거나(G가 다르면) 날짜가 바뀌었으면 이전 상태·호출 수는 버리고 새로 센다
     const same = String(cur[3]) === k.tag;
     // 시트가 '2026-10-20' 글자를 날짜로 바꿔 저장하므로, 날짜 칸은 날짜형이면 다시 글자로 바꿔 비교한다
     const day = cur[2] instanceof Date ? Utilities.formatDate(cur[2], 'Asia/Seoul', 'yyyy-MM-dd') : String(cur[2]);
     const fresh = !(same && day === today);
-    const lim = keyLimits(sh);
-    const cell = { 5: fresh ? '' : cur[1], 8: fresh ? '' : cur[4] };
+    const use = fresh ? {} : parseUsage(cur[1]);
     if (model) {
-      const c = MODEL_COL(model), n = (parseInt(String(cell[c]), 10) || 0) + (countUp ? 1 : 0);
-      cell[c] = n + (lim[c] ? ' / ' + lim[c] : '') + (exhausted ? ' 소진' : '');
+      const name = shortModel(model), u = use[name] || { n: 0, out: false };
+      if (countUp) u.n++;
+      if (exhausted) u.out = true;
+      use[name] = u;
     }
     const now = Utilities.formatDate(new Date(), 'Asia/Seoul', 'HH:mm');
     const st = status || (countUp ? '정상' : (fresh ? '' : cur[0]));
-    sh.getRange(k.row, 4, 1, 5).setValues([[st ? st.replace(/ \(\d\d:\d\d\)$/, '') + ' (' + now + ')' : '', cell[5], today, k.tag, cell[8]]]);
+    sh.getRange(k.row, 4, 1, 4).setValues([[st ? st.replace(/ \(\d\d:\d\d\)$/, '') + ' (' + now + ')' : '', usageText(use), today, k.tag]]);
   } catch (e) { console.warn('markKey', e); }
 }
 
@@ -309,10 +318,12 @@ function callGemini(systemText, contents) {
   const cache = CacheService.getScriptCache();
   const models = (props.getProperty('GEMINI_MODELS') || DEFAULT_MODELS.join(',')).split(',').map(s => s.trim()).filter(Boolean);
   const keys = loadKeys();
-  const payload = JSON.stringify({
+  // 2.5 계열은 답하기 전 '생각' 토큰이 출력 한도를 먹어 답이 끊기므로 생각을 끈다 (3.x는 이 설정을 넣으면 400 오류)
+  const payloadFor = model => JSON.stringify({
     systemInstruction: { parts: [{ text: systemText }] },
     contents: contents,
-    generationConfig: { temperature: 0.4, maxOutputTokens: 1024 },
+    generationConfig: Object.assign({ temperature: 0.4, maxOutputTokens: 1024 },
+      /^gemini-2\.5/.test(model) ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
   });
   const start = (Number(props.getProperty('KEY_RR')) || 0) % keys.length;
   props.setProperty('KEY_RR', String((start + 1) % keys.length)); // 다음 요청은 다음 키부터
@@ -323,7 +334,7 @@ function callGemini(systemText, contents) {
       if (cache.get('cool:' + k.tag + ':*') || cache.get('cool:' + k.tag + ':' + model)) continue;
       const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', {
         method: 'post', contentType: 'application/json', muteHttpExceptions: true,
-        headers: { 'x-goog-api-key': k.key }, payload: payload,
+        headers: { 'x-goog-api-key': k.key }, payload: payloadFor(model),
       });
       const code = res.getResponseCode(), body = res.getContentText();
       if (code === 200) {
