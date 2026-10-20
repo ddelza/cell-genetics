@@ -175,16 +175,6 @@ function setupKeySheet() {
   }
   Logger.log('키 시트: https://docs.google.com/spreadsheets/d/' + id + '/edit');
 }
-// 키 시트의 D~G(상태·호출 수·날짜·키 표시)를 모두 비우고 캐시·쉬는 표시도 지운다 (키를 통째로 바꿨을 때 편집기에서 실행)
-function resetKeyStatus() {
-  const sh = SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('KEY_SHEET_ID')).getSheetByName(KEY_SHEET);
-  if (sh.getLastRow() > 1) sh.getRange(2, 4, sh.getLastRow() - 1, 4).clearContent();
-  sh.getRange('G1').setValue('키 끝 6자리 (자동)').setFontWeight('bold');
-  clearKeyCache();
-  try { clearCooldowns(); } catch (e) {}
-  Logger.log('키 상태를 초기화했어요. 사용(체크)된 키 ' + loadKeys().length + '개');
-}
-
 function clearKeyCache() { CacheService.getScriptCache().removeAll(['keys', 'prompt']); }
 
 // 하루 한도는 미국 태평양 시각 자정에 풀린다 (한국 시각 오후 4시, 겨울엔 오후 5시) → 그때까지만 쉬게 한다 (캐시 최대 6시간)
@@ -260,15 +250,12 @@ function markKey(k, status, countUp) {
     const id = PropertiesService.getScriptProperties().getProperty('KEY_SHEET_ID');
     const sh = SpreadsheetApp.openById(id).getSheetByName(KEY_SHEET);
     const today = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd');
-    const cur = sh.getRange(k.row, 4, 1, 4).getValues()[0]; // D 상태 | E 호출 수 | F 날짜 | G 키 표시(끝 6자리)
-    // A열 키를 바꿔 넣었으면(G가 다르면) 이전 키의 상태·호출 수는 버리고 새로 센다
-    const same = String(cur[3]) === k.tag;
+    const cur = sh.getRange(k.row, 4, 1, 3).getValues()[0];
     // 시트가 '2026-10-20' 글자를 날짜로 바꿔 저장하므로, 날짜 칸은 날짜형이면 다시 글자로 바꿔 비교한다
     const day = cur[2] instanceof Date ? Utilities.formatDate(cur[2], 'Asia/Seoul', 'yyyy-MM-dd') : String(cur[2]);
-    const n = (same && day === today ? Number(cur[1]) || 0 : 0) + (countUp ? 1 : 0);
+    const n = (day === today ? Number(cur[1]) || 0 : 0) + (countUp ? 1 : 0);
     const now = Utilities.formatDate(new Date(), 'Asia/Seoul', 'HH:mm');
-    const st = status || (countUp ? '정상' : (same ? cur[0] : ''));
-    sh.getRange(k.row, 4, 1, 4).setValues([[st ? st.replace(/ \(\d\d:\d\d\)$/, '') + ' (' + now + ')' : '', n, today, k.tag]]);
+    sh.getRange(k.row, 4, 1, 3).setValues([[status ? status + ' (' + now + ')' : cur[0], n, today]]);
   } catch (e) { console.warn('markKey', e); }
 }
 
