@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>세포분열과 유전 표현하기 · 3학년 과학</title>
-<link rel="stylesheet" href="common.css?v=4">
+<link rel="stylesheet" href="common.css?v=5">
 <style>
 .step { display: none; }
 .step.active { display: block; }
@@ -79,7 +79,7 @@
   </div>
 </div>
 
-<script src="session.js?v=4"></script>
+<script src="session.js?v=5"></script>
 <script>
 const DB_URL = 'https://gwangsu-on-default-rtdb.firebaseio.com';
 const TEACHER_ID = '3000';
@@ -142,6 +142,7 @@ async function loadCurrentConfig() {
   const res = await fetch(`${DB_URL}/config/current.json`);
   if (!res.ok) throw new Error('설정 정보를 불러오지 못했습니다.');
   const data = await res.json();
+  window.dispatchEvent(new Event('cg-config-loaded'));
   return data || { year: new Date().getFullYear(), sem: 1 };
 }
 
@@ -227,6 +228,11 @@ document.getElementById('inputName').addEventListener('keydown', e => {
 });
 
 window.addEventListener('DOMContentLoaded', async function() {
+  // 응답이 한참 없으면(대개 이 사이트를 연 탭·창이 많아 브라우저 연결이 꽉 찬 경우) 안내
+  const slow = setTimeout(() => {
+    document.getElementById('semLabel').innerHTML = '⏳ 불러오기가 늦어지고 있어요. 이 사이트를 연 <b>다른 탭·창을 닫고</b> 새로고침해 주세요.';
+  }, 6000);
+  window.addEventListener('cg-config-loaded', () => clearTimeout(slow));
   let existing = getSrStudent();
   if (existing && existing.isGuest && !existing.grade) { clearSrStudent(); existing = null; }
   try {

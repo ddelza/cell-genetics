@@ -116,13 +116,44 @@
   // 실시간 감시: Firebase REST 스트리밍(EventSource). 경로 아래가 바뀌면 곧바로 onChange()를 부른다.
   // ⚠️ 브라우저는 같은 서버에 동시 연결을 6개까지만 연다 — 한 페이지에서 스트림은 1~2개만 쓸 것.
   // 연결이 끊기면 브라우저가 알아서 다시 붙고, 지원하지 않는 환경이면 null을 돌려준다(그땐 폴링만 쓰면 됨).
+  // ⚠️ 이 제한은 크롬 전체(모든 탭·창)에 걸린다. 그래서 탭이 안 보이는 동안(다른 탭으로 넘어가거나 창을 최소화)은
+  //    연결을 끊어 자리를 내주고, 다시 보이면 새로 연결하면서 그 사이 바뀐 내용을 한 번 불러온다.
+  //    (2026-10-20 실제 발생: 이 사이트를 연 다른 탭들이 연결을 붙잡고 있어 교사 페이지가 첫 요청부터 멈춤)
   DC.listen = function (p, onChange) {
     if (!window.EventSource) return null;
-    var es = new EventSource(DC.url(p)), t = null;
+    var es = null, t = null, closed = false;
     var fire = function () { clearTimeout(t); t = setTimeout(onChange, 150); };
-    es.addEventListener('put', fire);
-    es.addEventListener('patch', fire);
-    return es;
+    function open() {
+      if (es || closed) return;
+      es = new EventSource(DC.url(p));
+      es.addEventListener('put', fire);
+      es.addEventListener('patch', fire);
+    }
+    function shut() { if (es) { es.close(); es = null; } }
+    function onVis() {
+      if (closed) return;
+      if (document.hidden) shut();
+      else if (!es) { open(); fire(); }
+    }
+    document.addEventListener('visibilitychange', onVis);
+    if (!document.hidden) open();
+    return {
+      close: function () { closed = true; shut(); document.removeEventListener('visibilitychange', onVis); },
+    };
+  };
+
+  // 서버 응답이 한참 없으면(대개 이 사이트를 연 탭·창이 많아 브라우저 연결이 꽉 찬 경우) 화면 위에 안내를 띄운다.
+  DC.slowGuard = function (ms) {
+    var timer = setTimeout(function () {
+      if (document.getElementById('cg-slow')) return;
+      var d = document.createElement('div');
+      d.id = 'cg-slow';
+      d.style.cssText = 'position:fixed;left:12px;right:12px;top:12px;z-index:999;background:#fff4e6;border:1.5px solid #ffc078;color:#a85d00;border-radius:12px;padding:12px 14px;font-size:0.86rem;line-height:1.6;box-shadow:0 4px 16px rgba(0,0,0,0.15);max-width:640px;margin:0 auto';
+      d.innerHTML = '⏳ <b>불러오기가 늦어지고 있어요.</b><br>이 사이트를 연 <b>다른 탭이나 창이 많으면</b> 브라우저 연결이 꽉 차서 멈출 수 있어요. ' +
+        '안 쓰는 탭·창을 닫고 <a href="javascript:location.reload()" style="color:#a85d00;font-weight:700">새로고침</a>해 주세요.';
+      document.body.appendChild(d);
+    }, ms || 6000);
+    return function done() { clearTimeout(timer); var d = document.getElementById('cg-slow'); if (d) d.remove(); };
   };
   DC.del = function (p) {
     if (DC.isGuest()) return guestOp(function () { memSet(p, null); return null; });
@@ -143,7 +174,9 @@
       DC.student = window.requireSrLogin();
       if (!DC.student) return new Promise(function () {});
     }
+    var done = DC.slowGuard(6000);
     return fetch(DB_URL + '/config/current.json').then(function (r) { return r.json(); }).then(function (cfg) {
+      done();
       DC.cfg = cfg || { year: new Date().getFullYear(), sem: 2 };
       var head = document.getElementById('dc-head');
       if (head) {

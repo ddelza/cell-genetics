@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>교사용 모둠 편성 — 세포분열과 유전 표현하기</title>
-<link rel="stylesheet" href="common.css?v=4">
+<link rel="stylesheet" href="common.css?v=5">
 <style>
 .wrap { max-width: 1150px; }
 .step { display: none; } .step.active { display: block; }
@@ -99,8 +99,8 @@
   </div>
 </div>
 
-<script src="session.js?v=4"></script>
-<script src="cg.js?v=4"></script>
+<script src="session.js?v=5"></script>
+<script src="cg.js?v=5"></script>
 <script>
 const PASSWORD = 'byung0703!';
 let roster = {}, ban = '', conf = {}, picks = {}, rosterN = 0;
@@ -119,6 +119,7 @@ document.getElementById('pwInput').addEventListener('keydown', e => { if (e.key 
 DC.student = { id: '3000', name: '김병선', isTeacher: true };
 
 async function init() {
+  const done = DC.slowGuard(6000);
   await DC.start({ needLogin: false });
   document.getElementById('semLabel').textContent = `${DC.cfg.year}학년도 ${DC.cfg.sem}학기`;
   roster = await fetch(`${DC.DB_URL}/years/${DC.cfg.year}/students.json`).then(r => r.json()) || {};
@@ -128,7 +129,8 @@ async function init() {
   bans.add('T');
   const list = [...bans].sort((a, b) => { const [ga, ba] = a.split('-').map(Number), [gb, bb] = b.split('-').map(Number); return (ga - gb) || (ba - bb) || a.localeCompare(b); });
   document.getElementById('banSelect').innerHTML = list.map(b => `<option value="${DC.escAttr(b)}">${DC.esc(DC.banLabel(b))}</option>`).join('');
-  changeBan();
+  await changeBan();
+  done();
   setInterval(() => { if (!document.hidden && !typing()) load(); }, 10000);
 }
 // 실시간 감시는 지금 보고 있는 탭의 반 데이터만 (브라우저 동시 연결 수 제한 때문에 스트림은 최대 2개)
