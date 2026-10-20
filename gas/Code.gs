@@ -178,14 +178,14 @@ function setupKeySheet() {
 // 키 시트의 D~G(상태·호출 수·날짜·키 표시)를 모두 비우고 캐시·쉬는 표시도 지운다 (키를 통째로 바꿨을 때 편집기에서 실행)
 function resetKeyStatus() {
   const sh = SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('KEY_SHEET_ID')).getSheetByName(KEY_SHEET);
-  if (sh.getLastRow() > 1) sh.getRange(2, 4, sh.getLastRow() - 1, 4).clearContent();
+  if (sh.getLastRow() > 1) sh.getRange(2, 4, sh.getLastRow() - 1, 5).clearContent();
   sh.getRange('G1').setValue('키 끝 6자리 (자동)').setFontWeight('bold');
   clearKeyCache();
   try { clearCooldowns(); } catch (e) {}
   Logger.log('키 상태를 초기화했어요. 사용(체크)된 키 ' + loadKeys().length + '개');
 }
 
-function clearKeyCache() { CacheService.getScriptCache().removeAll(['keys', 'prompt']); }
+function clearKeyCache() { CacheService.getScriptCache().removeAll(['keys', 'prompt', 'limits']); }
 
 // 하루 한도는 미국 태평양 시각 자정에 풀린다 (한국 시각 오후 4시, 겨울엔 오후 5시) → 그때까지만 쉬게 한다 (캐시 최대 6시간)
 function secsToQuotaReset() {
@@ -255,20 +255,48 @@ function loadKeys() {
 }
 
 // 키 상태를 시트에 남긴다 (실패해도 답변에는 영향 없게)
-function markKey(k, status, countUp) {
+// 키 시트 열: D 상태 | E flash 오늘 호출 | F 날짜 | G 키 끝 6자리 | H flash-lite 오늘 호출
+// E·H 칸은 "3 / 20"처럼 "쓴 횟수 / 하루 한도"로 쓴다. 한도는 1행 머리글의 "(한도 20)" 숫자를 읽으므로
+// 실제 한도를 알게 되면 머리글 숫자만 고치면 된다 ("한도 ?"면 횟수만 표시).
+const MODEL_COL = model => /lite/.test(model) ? 8 : 5; // H : E
+function keyLimits(sh) {
+  const cache = CacheService.getScriptCache();
+  const hit = cache.get('limits');
+  if (hit) return JSON.parse(hit);
+  let h = sh.getRange(1, 5, 1, 4).getValues()[0]; // E1..H1
+  if (!/한도/.test(String(h[0])) || !/한도/.test(String(h[3]))) {
+    sh.getRange('E1').setValue('flash 오늘 (한도 20)');
+    sh.getRange('H1').setValue('flash-lite 오늘 (한도 ?)');
+    sh.getRange('E1:H1').setFontWeight('bold');
+    h = ['flash 오늘 (한도 20)', '', '', 'flash-lite 오늘 (한도 ?)'];
+  }
+  const lim = s => Number((String(s).match(/한도\s*(\d+)/) || [])[1]) || 0;
+  const out = { 5: lim(h[0]), 8: lim(h[3]) };
+  cache.put('limits', JSON.stringify(out), KEY_CACHE_SEC);
+  return out;
+}
+
+// exhausted: 이 모델의 하루 한도를 다 썼다는 응답을 받음
+function markKey(k, status, countUp, model, exhausted) {
   try {
     const id = PropertiesService.getScriptProperties().getProperty('KEY_SHEET_ID');
     const sh = SpreadsheetApp.openById(id).getSheetByName(KEY_SHEET);
     const today = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd');
-    const cur = sh.getRange(k.row, 4, 1, 4).getValues()[0]; // D 상태 | E 호출 수 | F 날짜 | G 키 표시(끝 6자리)
-    // A열 키를 바꿔 넣었으면(G가 다르면) 이전 키의 상태·호출 수는 버리고 새로 센다
+    const cur = sh.getRange(k.row, 4, 1, 5).getValues()[0]; // D, E, F, G, H
+    // A열 키를 바꿔 넣었거나(G가 다르면) 날짜가 바뀌었으면 이전 상태·호출 수는 버리고 새로 센다
     const same = String(cur[3]) === k.tag;
     // 시트가 '2026-10-20' 글자를 날짜로 바꿔 저장하므로, 날짜 칸은 날짜형이면 다시 글자로 바꿔 비교한다
     const day = cur[2] instanceof Date ? Utilities.formatDate(cur[2], 'Asia/Seoul', 'yyyy-MM-dd') : String(cur[2]);
-    const n = (same && day === today ? Number(cur[1]) || 0 : 0) + (countUp ? 1 : 0);
+    const fresh = !(same && day === today);
+    const lim = keyLimits(sh);
+    const cell = { 5: fresh ? '' : cur[1], 8: fresh ? '' : cur[4] };
+    if (model) {
+      const c = MODEL_COL(model), n = (parseInt(String(cell[c]), 10) || 0) + (countUp ? 1 : 0);
+      cell[c] = n + (lim[c] ? ' / ' + lim[c] : '') + (exhausted ? ' 소진' : '');
+    }
     const now = Utilities.formatDate(new Date(), 'Asia/Seoul', 'HH:mm');
-    const st = status || (countUp ? '정상' : (same ? cur[0] : ''));
-    sh.getRange(k.row, 4, 1, 4).setValues([[st ? st.replace(/ \(\d\d:\d\d\)$/, '') + ' (' + now + ')' : '', n, today, k.tag]]);
+    const st = status || (countUp ? '정상' : (fresh ? '' : cur[0]));
+    sh.getRange(k.row, 4, 1, 5).setValues([[st ? st.replace(/ \(\d\d:\d\d\)$/, '') + ' (' + now + ')' : '', cell[5], today, k.tag, cell[8]]]);
   } catch (e) { console.warn('markKey', e); }
 }
 
@@ -301,7 +329,7 @@ function callGemini(systemText, contents) {
       if (code === 200) {
         const cand = (JSON.parse(body).candidates || [])[0];
         const text = cand && cand.content ? (cand.content.parts || []).map(p => p.text || '').join('').trim() : '';
-        if (text) { markKey(k, '', true); return { text: text, model: model, key: k.tag }; }
+        if (text) { markKey(k, '', true, model); return { text: text, model: model, key: k.tag }; }
         lastErr = 'empty'; continue; // 안전 필터 등으로 빈 답 → 다른 조합으로
       }
       lastErr = code + ' ' + body.slice(0, 200);
@@ -309,7 +337,7 @@ function callGemini(systemText, contents) {
         const daily = /per.?day|PerDay|daily/i.test(body);
         const delay = (body.match(/"retryDelay":\s*"(\d+)/) || [])[1];
         cache.put('cool:' + k.tag + ':' + model, '1', daily ? secsToQuotaReset() : Math.min(300, Math.max(20, Number(delay) || 60)));
-        if (daily) markKey(k, model + ' 하루 한도', false);
+        if (daily) markKey(k, model + ' 하루 한도', false, model, true);
       } else if (code === 404 || /limit: 0/.test(body)) {
         cache.put('cool:' + k.tag + ':' + model, '1', 21600);
         markKey(k, model + ' 사용 불가', false);
