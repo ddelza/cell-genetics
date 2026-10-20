@@ -28,6 +28,18 @@
 .slot .mem .me { font-weight: 800; color: var(--accent); }
 .slot button { padding: 9px; border: none; border-radius: 9px; background: var(--accent); color: #fff; font-weight: 700; font-size: 0.85rem; cursor: pointer; font-family: inherit; }
 .slot button:disabled { background: #ced4da; cursor: default; }
+.guide-title { font-size: 0.95rem; font-weight: 800; margin: 22px 0 10px; color: var(--text); }
+.mguide { background: var(--surface); border-radius: 14px; padding: 16px 18px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); font-size: 0.85rem; line-height: 1.7; border-left: 5px solid var(--accent); }
+.mguide h3 { margin: 0 0 4px; font-size: 1rem; }
+.mguide .lead { margin: 0 0 8px; font-weight: 700; color: #333; }
+.mguide b.k { color: var(--accent); }
+.mguide ul { margin: 4px 0 0; padding-left: 20px; }
+.mguide li { margin: 2px 0; }
+.mguide .think { background: #f6f8fa; border-radius: 10px; padding: 8px 12px; margin-top: 8px; font-size: 0.82rem; }
+.mguide.vibe { border-left-color: #4263eb; } .mguide.body { border-left-color: #e8590c; } .mguide.jelly { border-left-color: #d6336c; } .mguide.div { border-left-color: #7048e8; }
+.divrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px; }
+.divrow > div { background: #f6f8fa; border-radius: 10px; padding: 8px 12px; font-size: 0.82rem; }
+@media (max-width: 520px) { .divrow { grid-template-columns: 1fr; } }
 @media (max-width: 420px) { .slot-grid { grid-template-columns: 52px 1fr 1fr; gap: 6px; } .slot { padding: 8px; } .slot-grid .mh { font-size: 0.7rem; } }
 </style>
 </head>
@@ -39,12 +51,60 @@
     <ul style="margin:6px 0 0;padding-left:20px">
       <li><b>매체</b>(💻 바이브코딩 · 🤸 신체표현 · 🍬 젤리활용)와 <b>분열</b>(🔵 체세포 분열 · 🟣 생식세포 분열)을 함께 골라요. 고른 칸이 곧 <b>내 모둠</b>이에요.</li>
       <li><b>선착순</b>이에요. 칸마다 정원이 있고, 차면 마감돼요.</li>
+      <li>매체마다 무엇을 하는지는 <a href="#guide" onclick="document.querySelector('.guide-title').scrollIntoView({behavior:'smooth'});return false" style="color:var(--accent);font-weight:700">아래 📖 매체 소개</a>를 먼저 읽어 보세요.</li>
       <li>선생님이 마감하기 전까지는 다른 칸으로 옮길 수 있어요. 옮기면 원래 자리는 다른 친구가 가져갈 수 있어요.</li>
     </ul>
   </div>
   <div id="status"></div>
   <div id="mine"></div>
   <div id="grid"><div class="loading-state">불러오는 중...</div></div>
+
+  <div class="guide-title">📖 매체 소개 — 고르기 전에 꼭 읽어 보세요</div>
+
+  <div class="mguide vibe">
+    <h3>💻 바이브코딩</h3>
+    <p class="lead">AI에게 말로 설명해서, 세포 분열을 보여 주는 <b class="k">웹페이지·애니메이션</b>을 만들어요.</p>
+    <b>이런 걸 만들 수 있어요 (예시)</b>
+    <ul>
+      <li>"다음 단계" 버튼을 누를 때마다 전기 → 중기 → 후기 → 말기로 넘어가며 염색체가 움직이는 애니메이션</li>
+      <li>염색체마다 색을 달리해서, 복제된 염색체가 어느 딸세포로 가는지 따라가 볼 수 있는 시뮬레이션</li>
+      <li>단계 이름을 누르면 그때 세포 안에서 일어나는 일을 설명해 주는 인터랙티브 그림</li>
+    </ul>
+    <div class="think">🤔 <b>고민해 볼 점</b> — 화면을 만들기 전에 단계마다 무엇을 보여 줄지 먼저 설계하고, AI에게 과학 용어로 정확하게 요구해요. AI가 만든 결과에 <b>과학적 오류</b>(염색체 수, 분리되는 대상 등)가 없는지 직접 검토하고 고쳐 달라고 해야 해요.</div>
+  </div>
+
+  <div class="mguide body">
+    <h3>🤸 신체표현</h3>
+    <p class="lead">모둠원이 직접 <b class="k">염색체가 되어</b> 몸으로 세포 분열을 보여 줘요.</p>
+    <b>이런 식으로 표현할 수 있어요 (예시)</b>
+    <ul>
+      <li>두 사람이 팔짱을 껴서 복제된 염색체(두 가닥이 붙어 있는 모습)가 되기</li>
+      <li>세포 가운데에 한 줄로 서서 염색체가 늘어서는 모습, 팔짱을 풀고 양쪽 끝으로 걸어가 염색체가 나뉘는 모습</li>
+      <li>바닥에 테이프나 줄로 세포막을 그리고, 분열이 끝날 때 줄을 가운데로 좁혀 세포가 둘로 나뉘는 모습</li>
+    </ul>
+    <div class="think">🤔 <b>고민해 볼 점</b> — 염색체의 <b>움직임과 분리</b>를 어떻게 보여 줄지, 여러 도구를 활용해 고민해 보세요. 예를 들어 줄넘기 줄·끈(방추사), 훌라후프·색 테이프(세포막, 핵막), 색깔 조끼·모자·이름표(어느 염색체인지, 짝이 되는 염색체는 누구인지)를 쓸 수 있어요. 발표는 영상으로 찍어 두면 좋아요.</div>
+  </div>
+
+  <div class="mguide jelly">
+    <h3>🍬 젤리활용 <span style="font-weight:400;font-size:0.85rem">(왕꿈틀이)</span></h3>
+    <p class="lead">길쭉한 <b class="k">왕꿈틀이 젤리</b>를 염색체 삼아, 단계별 모형을 만들어 보여 줘요.</p>
+    <b>이런 식으로 표현할 수 있어요 (예시)</b>
+    <ul>
+      <li>왕꿈틀이 두 마리를 나란히 붙여(이쑤시개로 고정) 복제된 염색체 만들기</li>
+      <li>색이 다른 왕꿈틀이로 아빠에게서 온 염색체와 엄마에게서 온 염색체 구분하기</li>
+      <li>종이나 접시 위에 세포를 그리고, 단계마다 젤리를 옮겨 놓으며 사진을 찍어 순서대로 보여 주기(스톱모션도 좋아요)</li>
+    </ul>
+    <div class="think">🤔 <b>고민해 볼 점</b> — 젤리의 <b>색과 길이</b>로 무엇을 구분할지, 실·빨대·이쑤시개로 방추사를 어떻게 나타낼지, 젤리가 움직이는 과정을 어떻게 보여 줄지 정해요. 먹는 건 활동이 다 끝난 뒤에! 🙂</div>
+  </div>
+
+  <div class="mguide div">
+    <h3>🔵 체세포 분열 vs 🟣 생식세포 분열</h3>
+    <p class="lead" style="font-weight:400">매체를 고를 때 분열도 함께 골라요. 우리 모둠이 맡은 분열의 <b>특징이 잘 드러나게</b> 표현해야 해요.</p>
+    <div class="divrow">
+      <div><b>🔵 체세포 분열</b><br>몸이 자라거나 상처가 아물 때 일어나는 분열. 염색체가 복제된 뒤 <b>한 번</b> 나뉘어요.</div>
+      <div><b>🟣 생식세포 분열</b><br>정자·난자 같은 생식세포를 만드는 분열. 짝을 이루는 염색체가 있고, <b>두 번</b> 연속으로 나뉘어요.</div>
+    </div>
+  </div>
 </div>
 
 <script src="session.js?v=4"></script>
@@ -65,7 +125,7 @@ function paint() {
   const myPick = picks[me()];
   if (conf.open) st.innerHTML = `<div class="status open">🟢 <b>지금 고를 수 있어요!</b> 칸마다 정원 <b>${cap}명</b> · 선착순</div>`;
   else if (Object.keys(picks).length) st.innerHTML = `<div class="status closed">🔒 <b>고르기가 마감되었어요.</b> 모둠 편성이 끝났어요.</div>`;
-  else st.innerHTML = `<div class="status wait">⏳ <b>아직 시작 전이에요.</b> 선생님이 시작하면 이 화면에서 바로 고를 수 있어요. (새로고침 안 해도 돼요)</div>`;
+  else st.innerHTML = `<div class="status wait">⏳ <b>아직 시작 전이에요.</b> 선생님이 시작하면 이 화면에서 바로 고를 수 있어요. (새로고침 안 해도 돼요)<br>기다리는 동안 아래 📖 매체 소개를 읽고 어떤 칸을 고를지 정해 두세요.</div>`;
 
   document.getElementById('mine').innerHTML = myPick && DC.slot(myPick.slot)
     ? `<div class="mine-box">내 모둠: ${DC.esc(DC.slotLabel(myPick.slot))}<small>모둠원: ${DC.slotMembers(picks, myPick.slot).map(m => DC.esc(m.name)).join(', ')}</small></div>` : '';
