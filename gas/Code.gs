@@ -251,7 +251,9 @@ function markKey(k, status, countUp) {
     const sh = SpreadsheetApp.openById(id).getSheetByName(KEY_SHEET);
     const today = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd');
     const cur = sh.getRange(k.row, 4, 1, 3).getValues()[0];
-    const n = (String(cur[2]) === today ? Number(cur[1]) || 0 : 0) + (countUp ? 1 : 0);
+    // 시트가 '2026-10-20' 글자를 날짜로 바꿔 저장하므로, 날짜 칸은 날짜형이면 다시 글자로 바꿔 비교한다
+    const day = cur[2] instanceof Date ? Utilities.formatDate(cur[2], 'Asia/Seoul', 'yyyy-MM-dd') : String(cur[2]);
+    const n = (day === today ? Number(cur[1]) || 0 : 0) + (countUp ? 1 : 0);
     const now = Utilities.formatDate(new Date(), 'Asia/Seoul', 'HH:mm');
     sh.getRange(k.row, 4, 1, 3).setValues([[status ? status + ' (' + now + ')' : cur[0], n, today]]);
   } catch (e) { console.warn('markKey', e); }
