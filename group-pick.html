@@ -28,6 +28,7 @@
 .slot .mem .me { font-weight: 800; color: var(--accent); }
 .slot button { padding: 9px; border: none; border-radius: 9px; background: var(--accent); color: #fff; font-weight: 700; font-size: 0.85rem; cursor: pointer; font-family: inherit; }
 .slot button:disabled { background: #ced4da; cursor: default; }
+.slot button.cancel { background: #fff; color: var(--danger); border: 1.5px solid #f2b8ae; padding: 6px; font-size: 0.78rem; }
 .guide-title { font-size: 0.95rem; font-weight: 800; margin: 22px 0 10px; color: var(--text); }
 .mguide { background: var(--surface); border-radius: 14px; padding: 16px 18px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); font-size: 0.85rem; line-height: 1.7; border-left: 5px solid var(--accent); }
 .mguide h3 { margin: 0 0 4px; font-size: 1rem; }
@@ -52,7 +53,7 @@
       <li><b>매체</b>(💻 바이브코딩 · 🤸 신체표현 · 🍬 젤리활용)와 <b>분열</b>(🔵 체세포 분열 · 🟣 생식세포 분열)을 함께 골라요. 고른 칸이 곧 <b>내 모둠</b>이에요.</li>
       <li><b>선착순</b>이에요. 칸마다 정원이 있고, 차면 마감돼요.</li>
       <li>매체마다 무엇을 하는지는 <a href="#guide" onclick="document.querySelector('.guide-title').scrollIntoView({behavior:'smooth'});return false" style="color:var(--accent);font-weight:700">아래 📖 매체 소개</a>를 먼저 읽어 보세요.</li>
-      <li>선생님이 마감하기 전까지는 다른 칸으로 옮길 수 있어요. 옮기면 원래 자리는 다른 친구가 가져갈 수 있어요.</li>
+      <li>선생님이 마감하기 전까지는 다른 칸으로 옮기거나 <b>선택 취소</b>할 수 있어요. 옮기거나 취소하면 원래 자리는 다른 친구가 가져갈 수 있어요.</li>
     </ul>
   </div>
   <div id="status"></div>
@@ -136,7 +137,7 @@ function paint() {
     DC.SLOTS.filter(s => s.media === m).forEach(s => {
       const mem = DC.slotMembers(picks, s.id);
       const mine = myPick && myPick.slot === s.id, full = mem.length >= cap;
-      const btn = mine ? '<button disabled>✓ 내 모둠</button>'
+      const btn = mine ? '<button disabled>✓ 내 모둠</button>' + (conf.open ? `<button class="cancel" data-cancel="1" ${busy ? 'disabled' : ''}>선택 취소</button>` : '')
         : `<button data-slot="${s.id}" ${!conf.open || full || busy ? 'disabled' : ''}>${full ? '마감' : myPick ? '여기로 옮기기' : '여기 고르기'}</button>`;
       h += `<div class="slot${mine ? ' mine' : ''}${full ? ' full' : ''}"><div class="top"><span class="no">${s.no}모둠</span><span class="cnt">${mem.length} / ${cap}</span></div>` +
         `<div class="mem">${mem.map(x => `<span class="${x.id === me() ? 'me' : ''}">${x.num ? x.num + ' ' : ''}${DC.esc(x.name)}</span>`).join(', ') || '<span class="dc-muted">아직 없음</span>'}</div>${btn}</div>`;
@@ -171,7 +172,26 @@ async function choose(slotId) {
   }
 }
 
+async function cancelPick() {
+  if (busy) return;
+  const prev = picks[me()]; if (!prev) return;
+  if (!confirm(`${DC.slotLabel(prev.slot)} 선택을 취소할까요?
+
+취소하면 이 자리는 다른 친구가 가져갈 수 있어요.`)) return;
+  busy = true; paint();
+  try {
+    await load();
+    if (!conf.open) { alert('고르기가 마감되어 취소할 수 없어요. 선생님께 말씀드려요.'); return; }
+    await DC.del(`pick/${ban}/${me()}`);
+  } catch (e) {
+    alert('취소하지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.');
+  } finally {
+    busy = false; await load();
+  }
+}
+
 document.getElementById('grid').addEventListener('click', e => {
+  if (e.target.closest('button[data-cancel]')) { cancelPick(); return; }
   const b = e.target.closest('button[data-slot]'); if (b) choose(b.dataset.slot);
 });
 
