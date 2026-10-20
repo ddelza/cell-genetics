@@ -11,24 +11,36 @@
 .status.wait { background: #fff4e6; border: 1.5px solid #ffc078; color: #a85d00; }
 .status.open { background: #ebfbee; border: 1.5px solid #8ce99a; color: #2b8a3e; }
 .status.closed { background: #f1f3f5; border: 1.5px solid #ced4da; color: #495057; }
-.mine-box { background: var(--accent); color: #fff; border-radius: 12px; padding: 14px; text-align: center; margin-bottom: 14px; font-weight: 700; line-height: 1.6; }
-.mine-box small { display: block; font-weight: 400; opacity: 0.9; }
-.slot-grid { display: grid; grid-template-columns: 76px 1fr 1fr; gap: 8px; align-items: stretch; }
+/* ⚠️ 버튼 위치 고정: 열리는 순간·친구가 고를 때 위쪽 높이가 바뀌면 버튼이 밀려서
+   "티켓팅"하듯 손을 올려 둔 학생이 엉뚱한 곳을 누르게 된다. 그래서
+   ① 안내 띠는 모든 상태를 한 칸에 겹쳐 두고 보이는 것만 바꾸고(높이 = 가장 긴 문구),
+   ② 내 모둠 상자는 늘 같은 크기로 자리를 차지하며,
+   ③ 칸마다 이름 목록 높이를 고정하고 버튼은 늘 한 줄·한 개만 둔다. */
+.status-stack { display: grid; margin-bottom: 14px; }
+.status-stack > .status { grid-area: 1 / 1; margin: 0; display: flex; flex-direction: column; justify-content: center; }
+.status-stack > .status.off { visibility: hidden; }
+.mine-box { display: flex; align-items: center; gap: 10px; background: var(--accent); color: #fff; border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; font-weight: 700; line-height: 1.6; border: 1.5px solid var(--accent); }
+.mine-box.none { background: var(--surface); color: var(--text-muted); border-style: dashed; border-color: var(--border); font-weight: 400; }
+.mine-box .txt { flex: 1; min-width: 0; text-align: center; }
+.mine-box .txt > div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mine-box small { display: block; font-weight: 400; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mine-box button { flex: none; padding: 7px 10px; border-radius: 9px; border: 1.5px solid #fff; background: transparent; color: #fff; font-weight: 700; font-size: 0.78rem; cursor: pointer; font-family: inherit; white-space: nowrap; }
+.mine-box button.hide { visibility: hidden; }
+.slot-grid { display: grid; grid-template-columns: 76px minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: stretch; }
 .slot-grid .hd { font-size: 0.78rem; font-weight: 700; text-align: center; color: var(--text-muted); align-self: end; }
 .slot-grid .mh { display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; text-align: center; background: var(--surface); border-radius: 12px; }
 .slot-grid .mh span { font-size: 1.5rem; }
-.slot { background: var(--surface); border-radius: 12px; padding: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; flex-direction: column; gap: 6px; border: 2px solid transparent; }
+.slot { min-width: 0; background: var(--surface); border-radius: 12px; padding: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); display: flex; flex-direction: column; gap: 6px; border: 2px solid transparent; }
 .slot.mine { border-color: var(--accent); background: #f4fbf5; }
 .slot.full:not(.mine) { opacity: 0.6; }
-.slot .top { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.78rem; }
+.slot .top { display: flex; justify-content: space-between; align-items: baseline; gap: 4px; font-size: 0.78rem; white-space: nowrap; overflow: hidden; }
 .slot .no { font-weight: 800; }
 .slot .cnt { font-weight: 700; color: var(--accent); }
 .slot.full .cnt { color: var(--danger); }
-.slot .mem { font-size: 0.78rem; line-height: 1.5; min-height: 2.2em; color: #444; flex: 1; }
+.slot .mem { font-size: 0.78rem; line-height: 1.5; height: 4.5em; overflow-y: auto; color: #444; flex: none; }
 .slot .mem .me { font-weight: 800; color: var(--accent); }
-.slot button { padding: 9px; border: none; border-radius: 9px; background: var(--accent); color: #fff; font-weight: 700; font-size: 0.85rem; cursor: pointer; font-family: inherit; }
+.slot button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 9px 4px; border: none; border-radius: 9px; background: var(--accent); color: #fff; font-weight: 700; font-size: 0.85rem; cursor: pointer; font-family: inherit; }
 .slot button:disabled { background: #ced4da; cursor: default; }
-.slot button.cancel { background: #fff; color: var(--danger); border: 1.5px solid #f2b8ae; padding: 6px; font-size: 0.78rem; }
 .guide-title { font-size: 0.95rem; font-weight: 800; margin: 22px 0 10px; color: var(--text); }
 .mguide { background: var(--surface); border-radius: 14px; padding: 16px 18px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); font-size: 0.85rem; line-height: 1.7; border-left: 5px solid var(--accent); }
 .mguide h3 { margin: 0 0 4px; font-size: 1rem; }
@@ -41,7 +53,7 @@
 .divrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px; }
 .divrow > div { background: #f6f8fa; border-radius: 10px; padding: 8px 12px; font-size: 0.82rem; }
 @media (max-width: 520px) { .divrow { grid-template-columns: 1fr; } }
-@media (max-width: 420px) { .slot-grid { grid-template-columns: 52px 1fr 1fr; gap: 6px; } .slot { padding: 8px; } .slot-grid .mh { font-size: 0.7rem; } }
+@media (max-width: 420px) { .slot-grid { grid-template-columns: 52px minmax(0, 1fr) minmax(0, 1fr); gap: 6px; } .slot { padding: 8px; } .slot-grid .mh { font-size: 0.7rem; } }
 </style>
 </head>
 <body>
@@ -124,12 +136,17 @@ async function load() {
 function paint() {
   const st = document.getElementById('status');
   const myPick = picks[me()];
-  if (conf.open) st.innerHTML = `<div class="status open">🟢 <b>지금 고를 수 있어요!</b> 칸마다 정원 <b>${cap}명</b> · 선착순</div>`;
-  else if (Object.keys(picks).length) st.innerHTML = `<div class="status closed">🔒 <b>고르기가 마감되었어요.</b> 모둠 편성이 끝났어요.</div>`;
-  else st.innerHTML = `<div class="status wait">⏳ <b>아직 시작 전이에요.</b> 선생님이 시작하면 이 화면에서 바로 고를 수 있어요. (새로고침 안 해도 돼요)<br>기다리는 동안 아래 📖 매체 소개를 읽고 어떤 칸을 고를지 정해 두세요.</div>`;
+  const mode = conf.open ? 'open' : Object.keys(picks).length ? 'closed' : 'wait';
+  st.innerHTML = '<div class="status-stack">' +
+    `<div class="status open${mode === 'open' ? '' : ' off'}"><div>🟢 <b>지금 고를 수 있어요!</b> 칸마다 정원 <b>${cap}명</b> · 선착순</div></div>` +
+    `<div class="status closed${mode === 'closed' ? '' : ' off'}"><div>🔒 <b>고르기가 마감되었어요.</b> 모둠 편성이 끝났어요.</div></div>` +
+    `<div class="status wait${mode === 'wait' ? '' : ' off'}"><div>⏳ <b>아직 시작 전이에요.</b> 선생님이 시작하면 이 화면에서 바로 고를 수 있어요. (새로고침 안 해도 돼요)<br>기다리는 동안 아래 📖 매체 소개를 읽고 어떤 칸을 고를지 정해 두세요.</div></div></div>`;
 
-  document.getElementById('mine').innerHTML = myPick && DC.slot(myPick.slot)
-    ? `<div class="mine-box">내 모둠: ${DC.esc(DC.slotLabel(myPick.slot))}<small>모둠원: ${DC.slotMembers(picks, myPick.slot).map(m => DC.esc(m.name)).join(', ')}</small></div>` : '';
+  const has = myPick && DC.slot(myPick.slot);
+  document.getElementById('mine').innerHTML = has
+    ? `<div class="mine-box"><div class="txt"><div>내 모둠: ${DC.esc(DC.slotLabel(myPick.slot))}</div><small>모둠원: ${DC.slotMembers(picks, myPick.slot).map(m => DC.esc(m.name)).join(', ')}</small></div>` +
+      `<button data-cancel="1" class="${conf.open ? '' : 'hide'}" ${busy || !conf.open ? 'disabled' : ''}>선택 취소</button></div>`
+    : `<div class="mine-box none"><div class="txt"><div>내 모둠: 아직 없음</div><small>고르면 여기에 표시돼요</small></div><button class="hide" disabled>선택 취소</button></div>`;
 
   let h = '<div class="slot-grid"><div></div>' + DC.DIVS.map(d => `<div class="hd">${DC.DIV_ICON[d]} ${d}</div>`).join('');
   DC.MEDIA.forEach(m => {
@@ -137,8 +154,8 @@ function paint() {
     DC.SLOTS.filter(s => s.media === m).forEach(s => {
       const mem = DC.slotMembers(picks, s.id);
       const mine = myPick && myPick.slot === s.id, full = mem.length >= cap;
-      const btn = mine ? '<button disabled>✓ 내 모둠</button>' + (conf.open ? `<button class="cancel" data-cancel="1" ${busy ? 'disabled' : ''}>선택 취소</button>` : '')
-        : `<button data-slot="${s.id}" ${!conf.open || full || busy ? 'disabled' : ''}>${full ? '마감' : myPick ? '여기로 옮기기' : '여기 고르기'}</button>`;
+      const btn = mine ? '<button disabled>✓ 내 모둠</button>'
+        : `<button data-slot="${s.id}" ${!conf.open || full || busy ? 'disabled' : ''}>${full ? '마감' : myPick ? '옮기기' : '여기 고르기'}</button>`;
       h += `<div class="slot${mine ? ' mine' : ''}${full ? ' full' : ''}"><div class="top"><span class="no">${s.no}모둠</span><span class="cnt">${mem.length} / ${cap}</span></div>` +
         `<div class="mem">${mem.map(x => `<span class="${x.id === me() ? 'me' : ''}">${x.num ? x.num + ' ' : ''}${DC.esc(x.name)}</span>`).join(', ') || '<span class="dc-muted">아직 없음</span>'}</div>${btn}</div>`;
     });
@@ -190,8 +207,10 @@ async function cancelPick() {
   }
 }
 
+document.getElementById('mine').addEventListener('click', e => {
+  if (e.target.closest('button[data-cancel]')) cancelPick();
+});
 document.getElementById('grid').addEventListener('click', e => {
-  if (e.target.closest('button[data-cancel]')) { cancelPick(); return; }
   const b = e.target.closest('button[data-slot]'); if (b) choose(b.dataset.slot);
 });
 
