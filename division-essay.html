@@ -26,7 +26,7 @@
 </div>
 
 <script src="session.js?v=5"></script>
-<script src="cg.js?v=5"></script>
+<script src="cg.js?v=6"></script>
 <script>
 const MEDIA_LABELS = Object.fromEntries(DC.MEDIA.map(m => [m, DC.MEDIA_ICON[m] + ' ' + m]));
 function makeGroups(slot) {
@@ -65,7 +65,7 @@ return [
 }
 
 
-DC.start({ title: '🔬 세포분열 표현하기 · 개인 논술', subtitle: '활동 2-③ · 매체 활용 · 분열 과정 표현 · 특징 비교' }).then(async () => {
+DC.start({ title: '🔬 세포분열 표현하기 · 개인 논술', subtitle: '활동 2-④ · 매체 활용 · 분열 과정 표현 · 특징 비교' }).then(async () => {
   const pick = await DC.getMyPick();
   const slot = pick && DC.slot(pick.slot);
   if (!slot) {

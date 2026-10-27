@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>모둠 발표 동료평가 — 세포분열과 유전 표현하기</title>
+<link rel="stylesheet" href="common.css?v=5">
+<style>
+.jump { display: flex; gap: 6px; flex-wrap: wrap; position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 8px 0; }
+.jump a { flex: 1; min-width: 70px; text-align: center; padding: 8px 6px; border-radius: 10px; background: var(--surface); border: 1.5px solid var(--border); font-size: 0.8rem; font-weight: 700; color: var(--text); text-decoration: none; }
+.jump a.done { border-color: #2f9e44; color: #2b8a3e; background: #ebfbee; }
+.jump a.mine { color: var(--text-muted); background: #f1f3f5; border-style: dashed; }
+.prog { font-size: 0.86rem; font-weight: 700; margin: 2px 0 6px; }
+.pcard { scroll-margin-top: 64px; }
+.pcard .ghead { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.pcard .ghead h2 { margin: 0; }
+.badge { flex-shrink: 0; font-size: 0.74rem; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: #f1f3f5; color: #868e96; }
+.badge.done { background: #ebfbee; color: #2b8a3e; }
+.members { font-size: 0.8rem; color: var(--text-muted); margin: 4px 0 2px; }
+.pcard.mine { background: #f8f9fa; box-shadow: none; border: 1.5px dashed var(--border); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="dc-head"></div>
+  <div class="card">
+    <h2>💬 모둠 발표 듣고 평가하기</h2>
+    <p class="hint">모둠마다 3분씩 발표해요. 발표를 들으면서 그 모둠 카드에 <b>① 가장 기억에 남는 단계</b>와 그 단계를 어떻게 표현했는지(또는 왜 기억에 남는지), <b>② 격려 한 줄</b>을 쓰고 <b>저장</b>하세요. 모둠마다 따로 저장되고, 끝날 때까지 고쳐서 다시 저장할 수 있어요.</p>
+    <div id="note"></div>
+  </div>
+  <div class="jump" id="jump"></div>
+  <div class="prog" id="prog"></div>
+  <div id="cards"><div class="loading-state">불러오는 중...</div></div>
+</div>
+
+<script src="session.js?v=5"></script>
+<script src="cg.js?v=6"></script>
+<script>
+let ban, mySlot = null, picks = {}, recs = {};
+const FIELDS = [['stage', '기억에 남는 단계'], ['how', '어떻게 표현했나 (기억에 남는 까닭)'], ['cheer', '격려 한 줄']];
+const targets = () => DC.SLOTS.filter(s => s.id !== mySlot);
+const pickVals = r => ({ stage: (r && r.stage) || '', how: (r && r.how) || '', cheer: (r && r.cheer) || '' });
+
+// 이 기기 임시저장 — 발표 중에 창을 닫거나 크롬북이 꺼져도 다시 열면 이어 쓸 수 있게
+const draftKey = slot => `cgDraft:${DC.cfg.year}:peer/${ban}/${slot}/${DC.student.id}`;
+function readDraft(slot) { try { return JSON.parse(localStorage.getItem(draftKey(slot)) || 'null'); } catch (e) { return null; } }
+function writeDraft(slot, v) { if (DC.isGuest()) return; try { localStorage.setItem(draftKey(slot), JSON.stringify({ v, ts: Date.now() })); } catch (e) {} }
+function clearDraft(slot) { try { localStorage.removeItem(draftKey(slot)); } catch (e) {} }
+
+function stageOptions(div, val) {
+  return '<option value="">— 단계를 고르세요 —</option>' + DC.STAGES[div].map(g =>
+    `<optgroup label="${DC.escAttr(g.title)}">` + g.items.map(x => {
+      const v = g.title + ' ' + x;
+      return `<option value="${DC.escAttr(v)}"${v === val ? ' selected' : ''}>${DC.esc(g.title + ' · ' + x)}</option>`;
+    }).join('') + '</optgroup>').join('');
+}
+
+function cardHtml(s) {
+  const mem = DC.slotMembers(picks, s.id).map(m => m.name).join(', ');
+  const head = `<div class="ghead"><h2>${DC.esc(DC.slotLabel(s.id))}</h2><span class="badge" id="b-${s.id}"></span></div>` +
+    `<div class="members">${mem ? '발표: ' + DC.esc(mem) : '&nbsp;'}</div>`;
+  if (s.id === mySlot) return `<div class="card pcard mine" id="c-${s.id}">${head}<p class="hint" style="margin:6px 0 0">🙋 우리 모둠이에요. 우리 모둠은 평가하지 않아요.</p></div>`;
+  const rec = recs[s.id], d = readDraft(s.id);
+  let v = pickVals(rec), restored = false;
+  if (d && d.v && d.ts > (rec ? rec.updatedAt : 0) && JSON.stringify(pickVals(d.v)) !== JSON.stringify(v)) { v = pickVals(d.v); restored = true; }
+  return `<div class="card pcard" id="c-${s.id}" data-slot="${s.id}">${head}` +
+    (restored ? `<div class="cg-draft-note">📝 이 기기에 <b>서버에 아직 저장하지 않은 임시 내용</b>(${DC.fmtTime(d.ts)})이 있어 불러왔어요. 꼭 <b>저장</b>을 눌러 주세요.</div>` : '') +
+    `<label class="field-label">1. 가장 기억에 남는 단계</label>` +
+    `<select class="cg-select" data-k="stage">${stageOptions(s.div, v.stage)}</select>` +
+    `<label class="field-label">친구들이 그 단계를 어떻게 표현했나요? (또는 왜 기억에 남나요?)</label>` +
+    `<textarea data-k="how" rows="3" placeholder="예) 중기에 염색체들이 세포 가운데 한 줄로 늘어서는 모습을 ○○로 나타낸 게 인상적이었어요.">${DC.esc(v.how)}</textarea>` +
+    `<label class="field-label">2. 발표한 친구들에게 격려 한 줄</label>` +
+    `<input type="text" data-k="cheer" maxlength="100" placeholder="예) 염색체가 갈라지는 장면이 한눈에 보여서 이해가 쏙 됐어!" value="${DC.escAttr(v.cheer)}">` +
+    `<div class="error-msg"></div><div class="ok-msg"></div>` +
+    `<button class="btn" data-save>💾 이 모둠 평가 저장</button>` +
+    `<div class="dc-saved"></div></div>`;
+}
+
+const vals = card => {
+  const o = {};
+  FIELDS.forEach(([k]) => { o[k] = card.querySelector(`[data-k="${k}"]`).value.trim(); });
+  return o;
+};
+
+// 저장 상태(배지·저장된 내용·위쪽 바로가기·진행률)만 다시 그린다 — 입력칸은 건드리지 않음
+function paintStatus() {
+  DC.SLOTS.forEach(s => {
+    const r = recs[s.id], b = document.getElementById('b-' + s.id);
+    if (b) {
+      b.className = 'badge' + (r ? ' done' : '');
+      b.textContent = s.id === mySlot ? '우리 모둠' : r ? '✓ 저장됨 ' + DC.fmtTime(r.updatedAt) : '아직 안 씀';
+    }
+    const box = document.querySelector(`#c-${s.id} .dc-saved`);
+    if (box) {
+      const title = DC.isGuest() ? '🧪 체험 모드 (저장 안 됨)' : '💾 서버에 저장된 내용';
+      box.innerHTML = r
+        ? `<div class="dc-saved-title">${title} <span class="dc-muted">(${DC.fmtTime(r.updatedAt)})</span></div>` +
+          FIELDS.map(([k, lab]) => `<div class="dc-saved-row"><b>${lab}</b><div>${DC.nl2br(r[k] || '')}</div></div>`).join('')
+        : `<div class="dc-saved-title">${title}</div><div class="dc-muted">아직 저장한 내용이 없어요.</div>`;
+    }
+  });
+  document.getElementById('jump').innerHTML = DC.SLOTS.map(s => {
+    const cls = s.id === mySlot ? 'mine' : recs[s.id] ? 'done' : '';
+    return `<a href="#c-${s.id}" class="${cls}">${s.no}모둠${s.id === mySlot ? ' 🙋' : recs[s.id] ? ' ✓' : ''}</a>`;
+  }).join('');
+  const n = targets().filter(s => recs[s.id]).length, all = targets().length;
+  document.getElementById('prog').textContent = n >= all ? `🎉 ${all}개 모둠을 모두 평가했어요!` : `평가한 모둠 ${n} / ${all}`;
+}
+
+async function save(card) {
+  const slot = card.dataset.slot, err = card.querySelector('.error-msg'), ok = card.querySelector('.ok-msg');
+  err.classList.remove('show'); ok.classList.remove('show');
+  const v = vals(card);
+  const miss = FIELDS.filter(([k]) => !v[k]).map(([, lab]) => lab);
+  if (miss.length) { err.textContent = '아직 비어 있어요: ' + miss.join(', '); err.classList.add('show'); return; }
+  const btn = card.querySelector('[data-save]');
+  btn.disabled = true; btn.textContent = '저장 중...';
+  const s = DC.student;
+  const rec = Object.assign({ id: s.id, name: s.name, num: s.num || 0, fromSlot: mySlot || '' }, v, { updatedAt: Date.now() });
+  try {
+    await DC.put(`peer/${ban}/${slot}/${s.id}`, rec);
+    recs[slot] = rec;
+    clearDraft(slot);
+    const note = card.querySelector('.cg-draft-note'); if (note) note.remove();
+    paintStatus();
+    ok.textContent = DC.isGuest() ? '🧪 체험 모드라 서버에는 저장되지 않았어요.' : `저장되었어요! (${DC.fmtTime(rec.updatedAt)})`;
+    ok.classList.add('show');
+  } catch (e) {
+    err.textContent = e.message + ' — 인터넷 연결을 확인하고 다시 눌러 주세요. (쓴 내용은 이 기기에 임시저장되어 있어요)'; err.classList.add('show');
+  } finally { btn.disabled = false; btn.textContent = '💾 이 모둠 평가 저장'; }
+}
+
+const cardsEl = document.getElementById('cards');
+const draftTimers = {};
+cardsEl.addEventListener('input', e => {
+  const card = e.target.closest('.pcard[data-slot]'); if (!card) return;
+  const slot = card.dataset.slot;
+  clearTimeout(draftTimers[slot]);
+  draftTimers[slot] = setTimeout(() => writeDraft(slot, vals(card)), 400);
+});
+cardsEl.addEventListener('change', e => { if (e.target.dataset.k === 'stage') e.target.dispatchEvent(new Event('input', { bubbles: true })); });
+cardsEl.addEventListener('click', e => { const b = e.target.closest('[data-save]'); if (b) save(b.closest('.pcard')); });
+
+DC.start({ title: '🔬 세포분열 표현하기 · 동료평가', subtitle: '활동 2-③ · 모둠 발표 듣고 평가하기' }).then(async () => {
+  ban = DC.myBan();
+  const p = await DC.get(`pick/${ban}`).catch(() => null);
+  picks = p || {};
+  const mine = picks[DC.student.id];
+  mySlot = mine && DC.slot(mine.slot) ? mine.slot : null;
+  if (!mySlot && !DC.student.isTeacher) document.getElementById('note').innerHTML =
+    '<div class="dc-info">🧩 아직 모둠이 정해지지 않아서 6개 모둠을 모두 평가할 수 있게 열어 두었어요. 모둠이 있는데 이 안내가 보이면 선생님께 말씀드려요.</div>';
+  const got = await Promise.all(DC.SLOTS.map(s => DC.get(`peer/${ban}/${s.id}/${DC.student.id}`).catch(() => null)));
+  DC.SLOTS.forEach((s, i) => { if (got[i]) recs[s.id] = got[i]; });
+  cardsEl.innerHTML = DC.SLOTS.map(cardHtml).join('');
+  paintStatus();
+});
+</script>
+</body>
+</html>

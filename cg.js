@@ -4,6 +4,7 @@
 // 데이터 경로: years/{year}/cellgen/{key}/{학년-반}/{studentId}
 //   개인 응답 레코드 = { id, name, ban, num, answers:{fieldId:value}, updatedAt }
 //   모둠 발표 자료   = show/{학년-반}/{모둠번호} = { media, members, link, mitosis, meiosis, lastEditor, lastEditorName, updatedAt }
+//   동료평가         = peer/{학년-반}/{발표 모둠 칸}/{평가한 학번} = { id, name, num, fromSlot, stage, how, cheer, updatedAt }
 //   교사 채점        = scores/{학년-반}/{studentId} = { panda, media, mitosis, meiosis, compare, memo, updatedAt }
 //
 // 페이지 쪽 사용 예:
@@ -41,6 +42,17 @@
     return Object.keys(picks || {}).map(function (k) { var p = picks[k]; return p && Object.assign({ id: k }, p); })
       .filter(function (p) { return p && p.id !== '_config' && p.slot === slotId; })
       .sort(function (a, b) { return (a.ts - b.ts) || String(a.id).localeCompare(String(b.id)); });
+  };
+  // 동료평가 "가장 기억에 남는 단계" 고르기 — 발표 모둠의 분열 종류에 맞는 단계만 보여 준다.
+  DC.STAGES = {
+    '체세포 분열': [{ title: '체세포 분열', items: ['간기', '전기', '중기', '후기', '말기'] }],
+    '생식세포 분열': [{ title: '감수 1분열', items: ['간기', '전기', '중기', '후기', '말기'] },
+      { title: '감수 2분열', items: ['전기', '중기', '후기', '말기'] }],
+  };
+  DC.stageList = function (div) {
+    var out = [];
+    (DC.STAGES[div] || []).forEach(function (g) { g.items.forEach(function (x) { out.push(g.title + ' ' + x); }); });
+    return out;
   };
   // 선착순 설정: pick/{반}/_config = { open, cap } — cap이 없으면 반 인원 ÷ 6 올림.
   // 편성 데이터와 같은 경로에 두어서 실시간 연결(EventSource) 하나로 둘 다 감시한다

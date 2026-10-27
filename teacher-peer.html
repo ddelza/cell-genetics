@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>교사용 동료평가 — 세포분열과 유전 표현하기</title>
+<link rel="stylesheet" href="common.css?v=5">
+<style>
+.wrap { max-width: 1150px; }
+.step { display: none; } .step.active { display: block; }
+.toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.toolbar select { padding: 9px; border-radius: 10px; border: 1.5px solid var(--accent); font-family: inherit; font-size: 0.88rem; }
+.toolbar label { font-size: 0.86rem; display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.navlinks { font-size: 0.82rem; margin-bottom: 10px; }
+.navlinks a { color: var(--accent); margin-right: 12px; font-weight: 700; }
+.grid-tbl { border-collapse: collapse; width: 100%; font-size: 0.8rem; background: var(--surface); }
+.grid-tbl th, .grid-tbl td { border: 1px solid #e9ecef; padding: 5px 6px; text-align: center; }
+.grid-tbl th { background: #f6f8fa; font-size: 0.74rem; }
+.grid-tbl td.nm { text-align: left; white-space: nowrap; }
+.grid-tbl td.ok { color: #2b8a3e; font-weight: 800; background: #ebfbee; }
+.grid-tbl td.own { color: #adb5bd; background: #f8f9fa; font-size: 0.7rem; }
+.grid-tbl td.full { color: #2b8a3e; font-weight: 700; }
+.grid-wrap { overflow-x: auto; }
+.groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+@media (max-width: 800px) { .groups { grid-template-columns: 1fr; } }
+.gbox { background: var(--surface); border-radius: 14px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.gbox h3 { margin: 0 0 2px; font-size: 0.95rem; display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.gbox h3 .btn { flex-shrink: 0; width: auto; margin: 0; }
+.gbox .mem { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 8px; }
+.rv { border-top: 1px solid #f1f3f5; padding: 8px 0; font-size: 0.84rem; line-height: 1.55; }
+.rv .top { display: flex; justify-content: space-between; gap: 6px; align-items: center; }
+.chip { display: inline-block; background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 2px 9px; font-size: 0.74rem; font-weight: 700; }
+.rv .who { color: var(--text-muted); font-size: 0.72rem; }
+.rv .who button { border: none; background: none; color: var(--danger); cursor: pointer; font-size: 0.72rem; }
+.rv .how { white-space: pre-wrap; word-break: break-word; margin-top: 3px; }
+.rv .cheer { margin-top: 3px; color: #5f3dc4; }
+.dc-bar-row.hl .dc-bar-fill { background: #f08c00; }
+.zoom { position: fixed; inset: 0; background: #1b1f27; z-index: 100; overflow-y: auto; padding: 28px 20px; display: none; }
+.zoom.on { display: block; }
+.zoom .in { max-width: 1100px; margin: 0 auto; color: #fff; }
+.zoom h2 { font-size: 1.9rem; margin: 0 0 6px; }
+.zoom .sub { font-size: 1.05rem; opacity: .8; margin-bottom: 18px; }
+.zoom .top3 { font-size: 1.15rem; margin-bottom: 18px; }
+.zoom .top3 b { color: #ffd43b; }
+.zoom .cheers { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.zoom .cheers div { background: #fff; color: #222; border-radius: 14px; padding: 14px 16px; font-size: 1.2rem; line-height: 1.5; word-break: break-word; }
+.zoom .close { position: fixed; top: 14px; right: 18px; font-size: 1rem; padding: 8px 14px; border-radius: 10px; border: none; cursor: pointer; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header"><h1>💬 모둠 발표 동료평가 (교사용)</h1><p id="semLabel"></p></div>
+
+  <div class="step active" id="step-pw">
+    <div class="card" style="max-width:420px;margin:0 auto">
+      <h2>비밀번호</h2>
+      <input type="password" id="pwInput">
+      <div class="error-msg" id="pwError"></div>
+      <button class="btn" onclick="checkPw()">입장</button>
+    </div>
+  </div>
+
+  <div class="step" id="step-main">
+    <div class="navlinks"><a href="teacher.html">📝 채점 페이지</a><a href="teacher-groups.html">🧩 모둠 편성</a><a href="teacher-peer.html">💬 동료평가</a></div>
+    <div class="toolbar">
+      <select id="banSelect" onchange="changeBan()"></select>
+      <label><input type="checkbox" id="anon" onchange="paint()"> 🙈 평가한 학생 이름 가리기 (화면 공유용)</label>
+      <span class="dc-muted" id="loadInfo"></span>
+    </div>
+    <p class="hint">학생이 저장하면 이 화면에 바로 반영돼요(실시간). 모둠 카드의 <b>🔍 크게 보기</b>는 발표가 끝난 뒤 그 모둠이 받은 격려를 이름 없이 크게 띄워 줘요. 부적절한 글은 🗑로 지울 수 있어요.</p>
+    <div class="card" id="statusCard">
+      <h2>📋 제출 현황</h2>
+      <div class="grid-wrap" id="statusGrid"></div>
+    </div>
+    <div class="groups" id="groups"></div>
+  </div>
+</div>
+<div class="zoom" id="zoom"><button class="close" onclick="closeZoom()">✕ 닫기 (Esc)</button><div class="in" id="zoomIn"></div></div>
+
+<script src="session.js?v=5"></script>
+<script src="cg.js?v=6"></script>
+<script>
+const PASSWORD = 'byung0703!';
+let roster = {}, ban = '', picks = {}, peer = {}, stream = null, zoomSlot = null;
+
+window.checkPw = function () {
+  if (document.getElementById('pwInput').value !== PASSWORD) {
+    const e = document.getElementById('pwError'); e.textContent = '비밀번호가 다릅니다.'; e.classList.add('show'); return;
+  }
+  document.getElementById('step-pw').classList.remove('active');
+  document.getElementById('step-main').classList.add('active');
+  init();
+};
+document.getElementById('pwInput').addEventListener('keydown', e => { if (e.key === 'Enter') checkPw(); });
+DC.student = { id: '3000', name: '김병선', isTeacher: true };
+
+async function init() {
+  const done = DC.slowGuard(6000);
+  await DC.start({ needLogin: false });
+  document.getElementById('semLabel').textContent = `${DC.cfg.year}학년도 ${DC.cfg.sem}학기`;
+  roster = await fetch(`${DC.DB_URL}/years/${DC.cfg.year}/students.json`).then(r => r.json()) || {};
+  const bans = new Set(Object.values(roster).filter(s => String(s.grade) === '3').map(s => `${s.grade}-${s.ban}`));
+  const sh = await DC.get('peer?shallow=true').catch(() => null);
+  Object.keys(sh || {}).forEach(b => bans.add(b));
+  bans.add('T');
+  const list = [...bans].sort((a, b) => { const [ga, ba] = a.split('-').map(Number), [gb, bb] = b.split('-').map(Number); return (ga - gb) || (ba - bb) || a.localeCompare(b); });
+  const sel = document.getElementById('banSelect');
+  sel.innerHTML = list.map(b => `<option value="${DC.escAttr(b)}">${DC.esc(DC.banLabel(b))}${sh && sh[b] ? ' ✓' : ''}</option>`).join('');
+  const firstWith = list.find(b => sh && sh[b] && b !== 'T');
+  if (firstWith) sel.value = firstWith;
+  await changeBan();
+  done();
+  setInterval(() => { if (!document.hidden) load(); }, 20000);
+}
+
+async function changeBan() {
+  ban = document.getElementById('banSelect').value;
+  if (stream) stream.close();
+  stream = DC.listen(`peer/${ban}`, load); // 실시간 연결은 이 하나만
+  await load();
+}
+
+async function load() {
+  const b = ban;
+  const [p, r] = await Promise.all([DC.get(`pick/${b}`).catch(() => null), DC.get(`peer/${b}`).catch(() => null)]);
+  if (b !== ban) return;
+  picks = p || {}; peer = r || {};
+  document.getElementById('loadInfo').textContent = '마지막 갱신 ' + new Date().toLocaleTimeString();
+  paint();
+}
+
+const anon = () => document.getElementById('anon').checked;
+const reviewsOf = slot => Object.entries(peer[slot] || {}).map(([id, r]) => Object.assign({ id }, r)).sort((a, b) => a.updatedAt - b.updatedAt);
+function stageCounts(slot) {
+  const s = DC.slot(slot), c = {};
+  DC.stageList(s.div).forEach(x => { c[x] = 0; });
+  reviewsOf(slot).forEach(r => { if (r.stage in c) c[r.stage]++; });
+  return c;
+}
+
+function students() {
+  if (ban !== 'T') {
+    const [g, b] = ban.split('-');
+    return Object.entries(roster).filter(([, s]) => String(s.grade) === g && String(s.ban) === b)
+      .map(([id, s]) => ({ id, name: s.name, num: s.num })).sort((x, y) => x.num - y.num);
+  }
+  const m = {}; // 교사 테스트 반: 편성·평가에 나온 사람
+  Object.entries(picks).forEach(([id, x]) => { if (id !== '_config' && x) m[id] = { id, name: x.name, num: x.num || 0 }; });
+  Object.values(peer).forEach(g => Object.entries(g || {}).forEach(([id, x]) => { m[id] = m[id] || { id, name: x.name, num: x.num || 0 }; }));
+  return Object.values(m).sort((x, y) => x.num - y.num || x.id.localeCompare(y.id));
+}
+
+function paint() {
+  const sts = students();
+  const slotOf = id => { const x = picks[id]; return x && DC.slot(x.slot) ? x.slot : ''; };
+  // 제출 현황 (이름이 나오므로 화면 공유용 모드에선 숨김)
+  document.getElementById('statusCard').style.display = anon() ? 'none' : '';
+  const doneCnt = st => DC.SLOTS.filter(s => peer[s.id] && peer[s.id][st.id]).length;
+  const need = st => DC.SLOTS.length - (slotOf(st.id) ? 1 : 0);
+  const fin = sts.filter(st => doneCnt(st) >= need(st)).length;
+  document.getElementById('statusGrid').innerHTML = !sts.length ? '<div class="dc-muted">학생 명단이 없어요.</div>' :
+    `<div class="dc-muted" style="margin-bottom:6px">모두 마친 학생 ${fin} / ${sts.length}명</div>` +
+    '<table class="grid-tbl"><tr><th>학생</th><th>내 모둠</th>' + DC.SLOTS.map(s => `<th>${s.no}모둠<br>${DC.MEDIA_ICON[s.media]}${DC.DIV_ICON[s.div]}</th>`).join('') + '<th>완료</th></tr>' +
+    sts.map(st => {
+      const my = slotOf(st.id), n = doneCnt(st);
+      return `<tr><td class="nm">${st.num ? st.num + '번 ' : ''}${DC.esc(st.name)}</td><td>${my ? DC.slot(my).no + '모둠' : '<span class="dc-muted">없음</span>'}</td>` +
+        DC.SLOTS.map(s => s.id === my ? '<td class="own">우리</td>' : peer[s.id] && peer[s.id][st.id] ? '<td class="ok">✓</td>' : '<td></td>').join('') +
+        `<td class="${n >= need(st) ? 'full' : ''}">${n}/${need(st)}</td></tr>`;
+    }).join('') + '</table>';
+
+  document.getElementById('groups').innerHTML = DC.SLOTS.map(s => {
+    const rs = reviewsOf(s.id), cnt = stageCounts(s.id);
+    const max = Math.max(1, ...Object.values(cnt));
+    const mem = DC.slotMembers(picks, s.id).map(m => m.name).join(', ');
+    const bars = '<div class="dc-bars" style="padding:0;margin:4px 0 8px">' + Object.entries(cnt).map(([k, v]) =>
+      `<div class="dc-bar-row${v && v === max ? ' hl' : ''}"><span>${DC.esc(k)}</span><div class="dc-bar-track"><div class="dc-bar-fill" style="width:${v / max * 100}%"></div></div><span class="dc-bar-val">${v}명</span></div>`).join('') + '</div>';
+    const list = rs.map(r => `<div class="rv"><div class="top"><span class="chip">${DC.esc(r.stage)}</span>` +
+      `<span class="who">${anon() ? '' : `${r.num ? r.num + '번 ' : ''}${DC.esc(r.name)} · `}${DC.fmtTime(r.updatedAt)} <button onclick="delReview('${s.id}','${DC.escAttr(r.id)}')" title="지우기">🗑</button></span></div>` +
+      `<div class="how">${DC.esc(r.how)}</div><div class="cheer">💬 ${DC.esc(r.cheer)}</div></div>`).join('');
+    return `<div class="gbox"><h3><span>${DC.esc(DC.slotLabel(s.id))}</span><button class="btn small secondary" onclick="openZoom('${s.id}')">🔍 크게 보기</button></h3>` +
+      `<div class="mem">${mem ? '발표: ' + DC.esc(mem) + ' · ' : ''}받은 평가 <b>${rs.length}</b>개</div>` +
+      (rs.length ? bars + list : '<div class="dc-muted">아직 받은 평가가 없어요.</div>') + '</div>';
+  }).join('');
+  if (zoomSlot) openZoom(zoomSlot);
+}
+
+window.delReview = async function (slot, id) {
+  const r = (peer[slot] || {})[id]; if (!r) return;
+  if (!confirm(`${r.name} 학생이 ${DC.slot(slot).no}모둠에 쓴 평가를 지울까요?\n\n${r.how}\n💬 ${r.cheer}`)) return;
+  await DC.del(`peer/${ban}/${slot}/${id}`);
+  await load();
+};
+
+// 발표가 끝난 모둠이 받은 격려를 이름 없이 크게 (화면 공유용)
+window.openZoom = function (slot) {
+  zoomSlot = slot;
+  const rs = reviewsOf(slot), cnt = stageCounts(slot);
+  const top = Object.entries(cnt).filter(([, v]) => v).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  document.getElementById('zoomIn').innerHTML =
+    `<h2>${DC.esc(DC.slotLabel(slot))}</h2><div class="sub">친구들이 보낸 격려 ${rs.length}개</div>` +
+    (top.length ? `<div class="top3">가장 기억에 남는 단계: ${top.map(([k, v]) => `<b>${DC.esc(k)}</b> ${v}명`).join(' · ')}</div>` : '') +
+    `<div class="cheers">${rs.map(r => `<div>💬 ${DC.esc(r.cheer)}</div>`).join('') || '<div>아직 받은 격려가 없어요.</div>'}</div>`;
+  document.getElementById('zoom').classList.add('on');
+};
+window.closeZoom = function () { zoomSlot = null; document.getElementById('zoom').classList.remove('on'); };
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && zoomSlot) closeZoom(); });
+</script>
+</body>
+</html>
