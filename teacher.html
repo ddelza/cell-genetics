@@ -104,7 +104,8 @@ table.grid { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
 <script>
 const PASSWORD = 'byung0703!';
 
-// 채점 항목 — 이번 범위(유전 10 + 세포분열 9 = 19점). 성찰일지(6점)는 이후 추가.
+// 채점 항목 — 유전(판다) 10 + 세포분열 논술 9 + 활동 돌아보기 5 + 동료평가 2 = 26점.
+// ⚠️ 평가계획 총점은 25점 — 판다를 9점으로 할지 등 배점 조정은 선생님 결정 대기(2026-10-27).
 // 판다 논술은 문항당 2점 × 5 = 10점. 실전(구글폼) 답으로 채점하고, 연습 답은 회색으로 참고만.
 const CRIT = [
   { id: 'p1', label: '1. 더 의미 있는 결과와 그 이유', short: '판다1', max: 2, src: 'panda',
@@ -141,10 +142,19 @@ const CRIT = [
     rubric: [['', [[3, '①과정의 차이 ②분열의 목적 ③분열의 결과 3가지 관점 모두 명확히 비교·분석'], [2, '2가지 관점'], [1, '1가지 관점'], [0, '비교·분석이 미흡하거나 없음']]]],
     key: '① 과정: 체세포 1회 분열·상동 염색체 접합 없음 / 감수 2회 연속 분열·상동 염색체 접합 후 분리<br>② 목적: 생장·재생 / 생식세포 형성<br>③ 결과: 딸세포 2개·염색체 수 변화 없음(2n→2n) / 딸세포 4개·염색체 수 반감(2n→n)',
     fields: [['q3', '체세포 분열 vs 감수 분열']] },
+  { id: 'fact', label: '4-① 활동으로 알게 된 흥미로운 사실', short: '흥미 사실', max: 2, src: 'essay',
+    rubric: [['', [[2, '단원 활동으로 알게 된 과학적 사실을 구체적으로 제시하고 흥미로운 까닭을 설명'], [1, '사실은 제시했으나 막연하거나 부정확, 또는 흥미로운 까닭이 없음'], [0, '알게 된 사실을 제시하지 않음']]]],
+    fields: [['q4Fact', '4-① 알게 된 흥미로운 사실']] },
+  { id: 'life', label: '4-② 나의 삶에 미칠 영향', short: '삶 영향', max: 3, src: 'essay',
+    rubric: [['', [[3, '알게 된 사실을 나의 삶과 구체적으로 연결해 앞으로의 생각·행동 변화를 근거를 들어 설명'], [2, '삶과 연결했으나 근거나 구체성이 다소 부족'], [1, '삶에 미칠 영향을 막연하게만 언급'], [0, '삶과의 연결이 없음']]]],
+    fields: [['q4Life', '4-② 나의 삶에 미칠 영향']] },
+  { id: 'peer', label: '모둠 발표 동료평가', short: '동료평가', max: 2, src: 'peer',
+    rubric: [['', [[2, '자기 모둠을 뺀 모든 모둠을 평가하고, 기억에 남는 단계를 어떻게 표현했는지(또는 까닭)를 구체적으로 씀'], [1, '일부 모둠만 평가했거나 서술이 막연함'], [0, '동료평가에 참여하지 않음']]]],
+    fields: [] },
 ];
 const MAX_TOTAL = CRIT.reduce((s, c) => s + c.max, 0);
 
-let roster = {}, panda = {}, essay = {}, scores = {}, curBan = '', list = [], curIdx = -1;
+let roster = {}, panda = {}, essay = {}, scores = {}, peer = {}, picks = {}, curBan = '', list = [], curIdx = -1;
 // 판다 실전 = 구글폼(시험 모드) 응답 시트를 Apps Script(판다쌤 웹앱 ?action=essays)로 읽는다. 연습 = panda.html(Firebase)
 const ESSAY_URL = 'https://script.google.com/macros/s/AKfycby5omdOfIpwg5KlOCwMS5L5zwbfZuF97qz8LyW-MUQWnKer11zBdh0CgAs-cPJ8CeH4/exec';
 let real = {}, realInfo = '', pfb = {}; // real: 학번 → { counts:{gb,gr,cb,cr}, q1~q5, team, role, ts }, pfb: 학번 → 연습 피드백
@@ -190,7 +200,7 @@ async function init() {
   document.getElementById('semLabel').textContent = `${DC.cfg.year}학년도 ${DC.cfg.sem}학기 · 이번 범위 ${MAX_TOTAL}점`;
   roster = await fetch(`${DC.DB_URL}/years/${DC.cfg.year}/students.json`).then(r => r.json()) || {};
   const bans = new Set(Object.values(roster).filter(s => String(s.grade) === '3').map(s => `${s.grade}-${s.ban}`));
-  const shallow = await Promise.all(['panda', 'essay'].map(k => DC.get(k + '?shallow=true').catch(() => null)));
+  const shallow = await Promise.all(['panda', 'essay', 'peer'].map(k => DC.get(k + '?shallow=true').catch(() => null)));
   shallow.forEach(d => Object.keys(d || {}).forEach(b => bans.add(b)));
   const blist = [...bans].sort((a, b) => {
     const [ga, ba] = a.split('-').map(Number), [gb, bb] = b.split('-').map(Number);
@@ -210,8 +220,8 @@ async function init() {
 window.loadClass = async function () {
   curBan = document.getElementById('banSelect').value;
   document.getElementById('loadInfo').textContent = '불러오는 중...';
-  const [p, e, s, f] = await Promise.all(['panda', 'essay', 'scores', 'pandaFb'].map(k => DC.get(`${k}/${curBan}`).catch(() => null)).concat([loadReal()]));
-  panda = p || {}; essay = e || {}; scores = s || {}; pfb = f || {};
+  const [p, e, s, f, pr, pk] = await Promise.all(['panda', 'essay', 'scores', 'pandaFb', 'peer', 'pick'].map(k => DC.get(`${k}/${curBan}`).catch(() => null)).concat([loadReal()]));
+  panda = p || {}; essay = e || {}; scores = s || {}; pfb = f || {}; peer = pr || {}; picks = pk || {};
   document.getElementById('loadInfo').textContent = `불러옴 ${new Date().toLocaleTimeString()} · ${realInfo}`;
   list = students();
   renderGrid();
@@ -272,6 +282,17 @@ async function saveFb(el) {
   } catch (e) { alert('피드백 저장 실패: ' + e.message); }
 }
 
+// 동료평가: peer/{반}/{발표 칸}/{평가자} — 이 학생이 다른 모둠에 쓴 평가 목록
+function peerOf(id) {
+  return DC.SLOTS.filter(sl => peer[sl.id] && peer[sl.id][id]).map(sl => Object.assign({ slot: sl.id }, peer[sl.id][id]));
+}
+function peerNeed(id) { const x = picks[id]; return DC.SLOTS.length - (x && DC.slot(x.slot) ? 1 : 0); }
+function peerHtml(id) {
+  const rs = peerOf(id);
+  return rs.length ? rs.map(r => `<b>${DC.esc(DC.slotLabel(r.slot))} · ${DC.esc(r.stage)}</b><div>${DC.esc(r.how)}<br>💬 ${DC.esc(r.cheer)}</div>`).join('')
+    : '<div class="none">(동료평가 없음)</div>';
+}
+
 function ansText(v) {
   if (!has(v) || (typeof v === 'object' && !Object.keys(v).length)) return '<div class="none">(빈칸)</div>';
   if (typeof v === 'object') { // 판다 결과표
@@ -290,15 +311,17 @@ window.openStu = function (i) {
     `<button class="btn small secondary" onclick="openStu(${i - 1})" ${i <= 0 ? 'disabled' : ''}>◀ 이전</button>` +
     `<button class="btn small secondary" onclick="openStu(${i + 1})" ${i >= list.length - 1 ? 'disabled' : ''}>다음 ▶</button>` +
     `<button class="btn small secondary" onclick="closeModal()">닫기</button></div>`;
-  [['panda', '🐼 활동 1 · 판다로 확인하는 멘델의 유전법칙'], ['essay', '🔬 활동 2 · 세포분열 표현하기 개인 논술']].forEach(([src, title]) => {
+  [['panda', '🐼 활동 1 · 판다로 확인하는 멘델의 유전법칙'], ['essay', '🔬 활동 2 · 세포분열 표현하기 개인 논술'], ['peer', '💬 활동 2 · 모둠 발표 동료평가']].forEach(([src, title]) => {
     const rec = recs[src], a = rec && rec.answers || {};
     if (src === 'panda') {
       const rr = real[s.id];
       h += `<div class="sec"><h4>${title} <span class="dc-muted" style="font-weight:400">· ${rr ? `실전 제출 ${DC.fmtTime(rr.ts)}` : '<span style="color:var(--danger)">실전 미제출</span>'} · ${rec ? `연습 저장 ${DC.fmtTime(rec.updatedAt)}` : '연습 없음'}${a.team || a.role ? ` · ${a.team ? DC.esc(a.team) + '모둠' : ''} ${DC.esc([].concat(a.role || []).join(', '))}` : ''}</span></h4>`;
+    } else if (src === 'peer') {
+      h += `<div class="sec"><h4>${title} <span class="dc-muted" style="font-weight:400">· 평가한 모둠 ${peerOf(s.id).length} / ${peerNeed(s.id)}</span></h4>`;
     } else
     h += `<div class="sec"><h4>${title} ${rec ? `<span class="dc-muted" style="font-weight:400">· 저장 ${DC.fmtTime(rec.updatedAt)}${src === 'panda' && (a.team || a.role) ? ` · ${a.team ? DC.esc(a.team) + '모둠' : ''} ${DC.esc([].concat(a.role || []).join(', '))}` : ''}${src === 'essay' && a.mySlot ? ` · ${DC.esc(DC.slotLabel(a.mySlot))}` : ''}</span>` : '<span style="color:var(--danger)">· 미제출</span>'}</h4>`;
     CRIT.filter(c => c.src === src).forEach(c => {
-      h += '<div class="crit"><div class="ans">' + c.fields.map(([f, l]) => src === 'panda' ? pandaField(s.id, f, l, a) : `<b>${DC.esc(l)}</b>${ansText(f === 'mySlot' && a[f] ? DC.slotLabel(a[f]) : a[f])}`).join('') +
+      h += '<div class="crit"><div class="ans">' + (src === 'peer' ? peerHtml(s.id) : '') + c.fields.map(([f, l]) => src === 'panda' ? pandaField(s.id, f, l, a) : `<b>${DC.esc(l)}</b>${ansText(f === 'mySlot' && a[f] ? DC.slotLabel(a[f]) : a[f])}`).join('') +
         (c.id === 'p5' ? `<b>연습 전체 피드백</b>${fbBox(s.id, 'all')}` : '') + '</div>' +
         `<div class="scorebox"><div class="ttl">${DC.esc(c.label)} <span class="dc-muted">/${c.max}</span></div>` +
         `<div class="pts" data-crit="${c.id}">` + Array.from({ length: c.max + 1 }, (_, p) => `<button class="${has(sc[c.id]) && +sc[c.id] === p ? 'on' : ''}" onclick="setScore('${c.id}',${p})">${p}</button>`).join('') +
@@ -392,14 +415,14 @@ window.exportCsv = function () {
   const q = v => '"' + String(v === undefined || v === null ? '' : v).replace(/"/g, '""') + '"';
   const head = ['학번', '번호', '이름', ...CRIT.map(c => `${c.short}(${c.max})`), `합계(${MAX_TOTAL})`, '메모',
     '판다 실전 제출', '판다:역할', '모둠 검정/갈색', '반 검정/갈색', '실전1', '실전2', '실전3', '실전4', '실전5', '연습1', '연습2', '연습3', '연습4', '연습5',
-    '논술:모둠', '모둠 매체', '모둠 분열', '1-①적절한 이유', '1-②한계점', '문항2 매체', '2-①체세포', '2-②감수', '3.비교·분석'];
+    '논술:모둠', '모둠 매체', '모둠 분열', '1-①적절한 이유', '1-②한계점', '문항2 매체', '2-①체세포', '2-②감수', '3.비교·분석', '4-①흥미로운 사실', '4-②삶에 미칠 영향', '동료평가 모둠 수'];
   const lines = [head.map(q).join(',')];
   list.forEach(s => {
     const sc = scores[s.id] || {}, pa = (panda[s.id] || {}).answers || {}, ea = (essay[s.id] || {}).answers || {}, ra = real[s.id] || {}, rc = ra.counts || {};
     lines.push([s.id, s.num, s.name, ...CRIT.map(c => sc[c.id]), graded(sc) ? total(sc) : '', sc.memo,
       ra.ts ? DC.fmtTime(ra.ts) : '', ra.role || [].concat(pa.role || []).join(', '), rc.gb !== undefined ? `${rc.gb}/${rc.gr}` : '', rc.cb !== undefined ? `${rc.cb}/${rc.cr}` : '',
       ra.q1, ra.q2, ra.q3, ra.q4, ra.q5, pa.q1, pa.q2, pa.q3, pa.q4, pa.q5,
-      DC.slot(ea.mySlot) ? DC.slot(ea.mySlot).no + '모둠' : '', ea.myMedia, ea.myDivision, ea.q1Why, ea.q1Limit, ea.otherMedia, ea.q2Mitosis, ea.q2Meiosis, ea.q3].map(q).join(','));
+      DC.slot(ea.mySlot) ? DC.slot(ea.mySlot).no + '모둠' : '', ea.myMedia, ea.myDivision, ea.q1Why, ea.q1Limit, ea.otherMedia, ea.q2Mitosis, ea.q2Meiosis, ea.q3, ea.q4Fact, ea.q4Life, `${peerOf(s.id).length}/${peerNeed(s.id)}`].map(q).join(','));
   });
   const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);

@@ -22,6 +22,7 @@
       <li><b>문항 1</b>은 <b>우리 모둠이 고른 매체</b>에 대해 써요.</li>
       <li><b>문항 2</b>는 우리 모둠 매체가 <b>아닌</b> 나머지 2개 중 <b>하나를 골라</b>, 그 매체로 세포 분열을 어떻게 표현할지 써요.</li>
       <li><b>문항 3</b>은 매체와 상관없이 체세포 분열과 감수 분열을 비교·분석해요.</li>
+      <li><b>문항 4</b>는 생식과 유전 단원 활동 전체를 돌아보며, 알게 된 흥미로운 사실과 그것이 내 삶에 미칠 영향을 써요.</li>
     </ul>
     <p style="margin:8px 0 0"><a href="division-show.html" target="_blank" rel="noopener" style="color:var(--accent);font-weight:700">👀 다른 모둠 표현 자료 보기 (새 창)</a></p>
   </div>
@@ -64,6 +65,15 @@ return [
         [1, '①과정의 차이, ②분열의 목적, ③분열의 결과 중 1가지 관점에서 명확하게 비교·분석함.'],
         [0, '체세포 분열과 감수 분열의 특징 비교·분석이 미흡하거나 전혀 없음.']] },
   ] },
+  { title: '문항 4. 활동 돌아보기', fields: [
+    { type: 'info', html: '<div class="cg-q-head"><span style="font-size:0.82rem">이번 <b>생식과 유전</b> 단원의 활동(판다 유전 실습, 세포 분열 표현하기, 발표 등)을 돌아보며 써요.</span><span class="cg-pts">논술 5점</span></div>' },
+    { id: 'q4Fact', type: 'textarea', wrap: true, rows: 4, pts: '2점', short: '4-① 알게 된 흥미로운 사실', label: '① 활동을 통해 알게 된 흥미로운 사실 한 가지',
+      hint: '어떤 활동에서 무엇을 알게 되었는지, 왜 흥미로웠는지 함께 써요.',
+      rubric: [[2, '단원 활동을 통해 알게 된 과학적 사실을 구체적으로 제시하고, 그 사실이 흥미로운 까닭을 설명함.'], [1, '사실을 제시했으나 막연하거나 과학적 내용이 부정확함, 또는 흥미로운 까닭이 없음.'], [0, '알게 된 사실을 제시하지 않음.']] },
+    { id: 'q4Life', type: 'textarea', wrap: true, rows: 5, pts: '3점', short: '4-② 나의 삶에 미칠 영향', label: '② 이것이 앞으로 나의 삶에 어떤 영향을 미치게 될지',
+      hint: '①에서 쓴 사실이 나의 생활·건강·진로·가족·사회 문제를 바라보는 생각 등에 어떻게 이어질지 구체적으로 써요.',
+      rubric: [[3, '알게 된 사실을 나의 삶과 구체적으로 연결하여, 앞으로의 생각이나 행동 변화를 근거를 들어 설명함.'], [2, '나의 삶과 연결했으나 근거나 구체성이 다소 부족함.'], [1, '삶에 미칠 영향을 막연하게만 언급함.'], [0, '삶과의 연결이 없음.']] },
+  ] },
 ];
 }
 
@@ -77,7 +87,7 @@ DC.start({ title: '🔬 세포분열 표현하기 · 개인 논술 연습', subt
   }
   DC.form({
     mount: '#form', key: 'essay', groups: makeGroups(slot), saveLabel: '💾 연습 저장하기',
-    required: ['q1Why', 'q1Limit', 'otherMedia', 'q2Mitosis', 'q2Meiosis', 'q3'],
+    required: ['q1Why', 'q1Limit', 'otherMedia', 'q2Mitosis', 'q2Meiosis', 'q3', 'q4Fact', 'q4Life'],
     validate: ans => {
       if (ans.otherMedia === slot.media) return '문항 2는 우리 모둠 매체가 아닌 다른 매체를 골라야 해요.';
       // 채점용으로 저장 당시의 내 모둠 정보도 함께 남긴다
