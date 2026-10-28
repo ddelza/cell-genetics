@@ -240,7 +240,7 @@ function total(sc) { return sc ? CRIT.reduce((s, c) => s + (has(sc[c.id]) ? +sc[
 function graded(sc) { return sc ? CRIT.filter(c => has(sc[c.id])).length : 0; }
 
 function renderGrid() {
-  let h = '<tr><th>번호</th><th>이름</th><th>판다<br>실전</th><th>판다<br>연습</th><th>논술<br>제출</th><th>모둠<small>매체·분열 → 문항2</small></th>' +
+  let h = '<tr><th>번호</th><th>이름</th><th>판다<br>실전</th><th>판다<br>연습</th><th title="세포분열 개인 논술 연습장(division-essay.html)에 저장했는지 — 판다 논술과 무관">세포 논술<br>연습</th><th>모둠<small>매체·분열 → 문항2</small></th>' +
     CRIT.map(c => `<th>${c.short}<small>/${c.max}</small></th>`).join('') + `<th>합계<small>/${MAX_TOTAL}</small></th><th>메모</th></tr>`;
   list.forEach((s, i) => {
     const p = panda[s.id], e = essay[s.id], sc = scores[s.id];
