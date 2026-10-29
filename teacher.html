@@ -93,6 +93,11 @@ table.grid { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
       <input type="number" id="chatLimit" min="1" max="500" style="width:70px;padding:7px;border:1.5px solid var(--border);border-radius:8px" onchange="saveChatLimit()">
       <span class="dc-muted" style="font-size:0.8rem">번 · 대화 기록은 학생 줄을 눌러 맨 아래에서 확인</span>
     </div>
+    <div class="toolbar">
+      <button class="btn small secondary" onclick="showMissing()">🚨 실전 미제출 모아보기</button>
+      <button class="btn small secondary" id="scoreToggle" onclick="toggleScore()">📊 학생 점수 …</button>
+      <a class="btn small secondary" href="my-score.html" target="_blank" rel="noopener" style="text-decoration:none;text-align:center">👀 학생 점수 확인판 보기</a>
+    </div>
     <p class="hint">학생 줄을 누르면 답안을 보며 채점할 수 있어요. 점수 버튼을 누르면 바로 저장돼요. (모둠 자료 페이지는 학생 화면에서 교사 계정 3000/김병선으로 로그인돼 있어야 열려요)</p>
     <div class="grid-wrap"><table class="grid" id="grid"></table></div>
   </div>
@@ -101,57 +106,11 @@ table.grid { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
 
 <script src="session.js?v=5"></script>
 <script src="cg.js?v=6"></script>
+<script src="crit.js?v=1"></script>
 <script>
 const PASSWORD = 'byung0703!';
 
-// 채점 항목 — 유전(판다) 9 + 세포분열 논술 9 + 활동 돌아보기 5 + 동료평가 2 = 25점(평가계획 총점).
-// 판다 논술은 2번(어버이 순종 교배 설명, 관찰 결과 서술)만 1점, 나머지 4문항은 2점 → 9점(2026-10-28).
-// 실전(구글폼) 답으로 채점하고, 연습 답은 회색으로 참고만.
-const CRIT = [
-  { id: 'p1', label: '1. 더 의미 있는 결과와 그 이유', short: '판다1', max: 2, src: 'panda',
-    rubric: [['', [[2,"반 전체 또는 우리 모둠 중 하나를 고르고 타당한 근거를 제시함 — (가) 반 전체: 표본이 많을수록 우연의 영향이 줄어 기댓값(3:1)에 가까워짐 / (나) 우리 모둠: 두 결과의 비율을 계산해 모둠 쪽이 실제로 3:1에 더 가까웠음을 근거로 듦"],[1,"선택은 했으나 근거가 막연하거나 일부만 맞음 (예: \"수가 많아서\"만 쓰고 왜 그런지 없음, 비율 비교가 틀림)"],[0,"무응답이거나 근거가 없음"]]]],
-    key: '(가) 반 전체: 표본이 많을수록 우연에 의한 오차가 줄어 이론적인 비(3:1)에 가까워짐<br>(나) 우리 모둠: 모둠 결과가 반 전체보다 실제로 3:1에 더 가까웠다면 그 비교를 근거로 모둠이 더 의미 있다고 해도 인정',
-    fields: [["counts","모의 실험 결과"],["q1","1. 더 의미 있는 결과와 그 이유"]] },
-  { id: 'p2', label: '2. 어버이 순종 교배 설명', short: '판다2', max: 1, src: 'panda',
-    rubric: [['', [[1,"교배 대상(검정 순종 × 갈색 순종)과 결과(자손 1대가 모두 검정)를 모두 정확히 씀"],[0,"교배 대상이나 결과 중 하나라도 빠지거나 틀림, 또는 무응답"]]]],
-    key: '검정 순종(BB) × 갈색 순종(bb) → 자손 1대는 모두 검정(Bb)',
-    fields: [["q2","2. 어버이 순종 교배 설명"]] },
-  { id: 'p3', label: '3. 어버이 순종 교배로 추측할 수 있는 것', short: '판다3', max: 2, src: 'panda',
-    rubric: [['', [[2,"자손 1대가 갈색 유전자를 가졌는데도 모두 검정으로 나타난 것을 근거로 검정이 우성(갈색이 열성)임을 추론함"],[1,"우성·열성을 언급했으나 근거(자손 1대가 모두 검정)가 없거나 우열 관계 서술이 일부 부정확함"],[0,"무응답이거나 우열 관계를 반대로 씀"]]]],
-    key: '검정이 갈색에 대해 우성 — 잡종에서는 우성 형질만 나타남(우열의 원리)',
-    fields: [["q3","3. 어버이 순종 교배로 추측할 수 있는 것"]] },
-  { id: 'p4', label: '4. 자손 1대 잡종 교배 설명(정수비 포함)', short: '판다4', max: 2, src: 'panda',
-    rubric: [['', [[2,"검정 잡종(Bb)끼리 교배하여 자손 2대에서 검정 : 갈색이 약 3 : 1로 나왔음을 씀 (결과만 써도 만점, 반 전체 숫자·비율이 있으면 더 좋음)"],[1,"교배 대상 또는 정수비 중 하나가 빠지거나 비율이 부정확함"],[0,"무응답이거나 결과가 틀림"]]]],
-    key: '검정 잡종(Bb)끼리 교배 → 자손 2대 검정 : 갈색 ≈ 3 : 1',
-    fields: [["q4","4. 자손 1대 잡종 교배 설명(정수비 포함)"]] },
-  { id: 'p5', label: '5. 자손 2대 정수비의 의미', short: '판다5', max: 2, src: 'panda',
-    rubric: [['', [[2,"다음 중 하나를 정확히 씀 — (가) 자손 2대 유전자형이 BB, Bb, Bb, bb로 나와 검정 : 갈색 = 3 : 1이 됨 / (나) 분리의 법칙: 생식세포가 형성될 때 대립유전자가 분리되어 서로 다른 생식세포로 들어감"],[1,"(가) 또는 (나)를 언급했으나 경우의 수나 정의가 불완전·부정확함"],[0,"무응답이거나 정수비의 의미와 관계없는 내용"]]]],
-    key: '둘 중 하나면 만점 — (가) BB, Bb, Bb, bb → 검정 : 갈색 = 3 : 1 / (나) 생식세포가 형성될 때 대립유전자가 분리되어 서로 다른 생식세포로 들어감(분리의 법칙)',
-    fields: [["q5","5. 자손 2대 정수비의 의미"]] },
-  { id: 'media', label: '매체 활용의 적절성 설명하기', short: '매체 활용', max: 2, src: 'essay',
-    rubric: [['', [[2, '매체가 분열 과정 설명에 적절한 이유를 과학적으로 제시 + 모형과 실제 세포 분열의 차이점(한계점)을 명확히 설명'], [1, '매체 선택 이유는 제시했으나 실제 현상과의 차이점 설명이 부족·추상적'], [0, '매체 활용 설명이나 실제 현상과의 비교 분석이 거의 없음']]]],
-    fields: [['mySlot', '우리 모둠'], ['q1Why', '① 매체가 적절한 이유'], ['q1Limit', '② 실제 현상과의 차이점(한계점)']] },
-  { id: 'mitosis', label: '세포분열 과정 표현 — 체세포 분열', short: '체세포', max: 2, src: 'essay',
-    rubric: [['', [[2, '각 단계(전·중·후·말기)에서 염색체의 복제 및 분리 행동을 과학적 오류 없이 정확하게 표현'], [1, '주요 흐름은 나타나나 일부 단계에서 행동 표현이 불분명']]]],
-    fields: [['otherMedia', '문항 2에서 고른 매체'], ['q2Mitosis', '체세포 분열 표현']] },
-  { id: 'meiosis', label: '세포분열 과정 표현 — 감수 분열', short: '감수', max: 2, src: 'essay',
-    rubric: [['', [[2, '감수 분열만의 고유한 특징을 생물학적으로 타당하게 구현하여 체세포 분열과의 차이가 뚜렷함'], [1, '감수 분열만의 고유한 특징이 일부만 나타나거나 표현이 미흡']]]],
-    key: '상동 염색체 접합(2가 염색체), 1분열에서 상동 염색체 분리, 2회 연속 분열(2분열 전 DNA 복제 없음), 염색체 수 반감(2n→n), 딸세포 4개',
-    fields: [['otherMedia', '문항 2에서 고른 매체'], ['q2Meiosis', '감수 분열 표현']] },
-  { id: 'compare', label: '각 분열의 특징 비교·분석하기', short: '비교·분석', max: 3, src: 'essay',
-    rubric: [['', [[3, '①과정의 차이 ②분열의 목적 ③분열의 결과 3가지 관점 모두 명확히 비교·분석'], [2, '2가지 관점'], [1, '1가지 관점'], [0, '비교·분석이 미흡하거나 없음']]]],
-    key: '① 과정: 체세포 1회 분열·상동 염색체 접합 없음 / 감수 2회 연속 분열·상동 염색체 접합 후 분리<br>② 목적: 생장·재생 / 생식세포 형성<br>③ 결과: 딸세포 2개·염색체 수 변화 없음(2n→2n) / 딸세포 4개·염색체 수 반감(2n→n)',
-    fields: [['q3', '체세포 분열 vs 감수 분열']] },
-  { id: 'fact', label: '4-① 활동으로 알게 된 흥미로운 사실', short: '흥미 사실', max: 2, src: 'essay',
-    rubric: [['', [[2, '단원 활동으로 알게 된 과학적 사실을 구체적으로 제시하고 흥미로운 까닭을 설명'], [1, '사실은 제시했으나 막연하거나 부정확, 또는 흥미로운 까닭이 없음'], [0, '알게 된 사실을 제시하지 않음']]]],
-    fields: [['q4Fact', '4-① 알게 된 흥미로운 사실']] },
-  { id: 'life', label: '4-② 나의 삶에 미칠 영향', short: '삶 영향', max: 3, src: 'essay',
-    rubric: [['', [[3, '알게 된 사실을 나의 삶과 구체적으로 연결해 앞으로의 생각·행동 변화를 근거를 들어 설명'], [2, '삶과 연결했으나 근거나 구체성이 다소 부족'], [1, '삶에 미칠 영향을 막연하게만 언급'], [0, '삶과의 연결이 없음']]]],
-    fields: [['q4Life', '4-② 나의 삶에 미칠 영향']] },
-  { id: 'peer', label: '모둠 발표 동료평가', short: '동료평가', max: 2, src: 'peer',
-    rubric: [['', [[2, '자기 모둠을 뺀 모든 모둠을 평가하고, 기억에 남는 단계를 어떻게 표현했는지(또는 까닭)를 구체적으로 씀'], [1, '일부 모둠만 평가했거나 서술이 막연함'], [0, '동료평가에 참여하지 않음']]]],
-    fields: [] },
-];
+const CRIT = DC.CRIT; // 채점 항목은 crit.js (학생 점수 확인판과 공용)
 const MAX_TOTAL = CRIT.reduce((s, c) => s + c.max, 0);
 
 let roster = {}, panda = {}, essay = {}, scores = {}, peer = {}, picks = {}, curBan = '', list = [], curIdx = -1;
@@ -162,23 +121,8 @@ async function loadReal() {
   try {
     const r = await fetch(ESSAY_URL + '?action=essays&pw=' + encodeURIComponent(PASSWORD)).then(x => x.json());
     if (!r.ok) throw new Error(r.error || '불러오기 실패');
-    const H = r.header, col = re => H.findIndex(h => re.test(h));
-    const C = { sid: col(/학번/), name: col(/이름/), team: col(/모둠\s*번호/), role: col(/역할/), email: col(/이메일|email/i),
-      gb: col(/우리\s*모둠.*검정/), gr: col(/우리\s*모둠.*갈색/), cb: col(/반\s*전체.*검정/), cr: col(/반\s*전체.*갈색/) };
-    [1, 2, 3, 4, 5].forEach(n => { C['q' + n] = col(new RegExp('^\\s*' + n + '\\s*[.)]')); });
-    const out = {};
-    r.rows.forEach(row => {
-      const g = k => C[k] >= 0 ? String(row[C[k]] ?? '').trim() : '';
-      let sid = g('sid').replace(/\D/g, '');
-      if (sid.length !== 4) sid = (g('email').match(/\d{4}/) || [''])[0];
-      if (sid.length !== 4) return;
-      const ts = typeof row[0] === 'number' ? row[0] : 0;
-      if (out[sid] && out[sid].ts > ts) return; // 여러 번 냈으면 마지막 것
-      out[sid] = { ts, name: g('name'), team: g('team'), role: g('role'), q1: g('q1'), q2: g('q2'), q3: g('q3'), q4: g('q4'), q5: g('q5'),
-        counts: { gb: g('gb'), gr: g('gr'), cb: g('cb'), cr: g('cr') } };
-    });
+    const { out, miss } = DC.parsePandaReal(r); // 열 해석은 crit.js
     real = out;
-    const miss = Object.keys(C).filter(k => C[k] < 0 && !['email', 'name', 'team'].includes(k)); // 모둠 번호는 폼에서 뺐으므로 없어도 됨
     realInfo = `실전 ${Object.keys(out).length}명${miss.length ? ` (못 찾은 열: ${miss.join(', ')})` : ''}`;
   } catch (e) { real = {}; realInfo = '실전 불러오기 실패: ' + e.message; }
 }
@@ -191,25 +135,8 @@ async function loadDivReal() {
     const r = await fetch(ESSAY_URL + '?action=divEssays&pw=' + encodeURIComponent(PASSWORD)).then(x => x.json());
     if (!r.ok) throw new Error(r.error || '불러오기 실패');
     if (!r.header) throw new Error('Apps Script(Code.gs)를 새 버전으로 다시 배포해 주세요');
-    const H = r.header.map(h => String(h).trim()), col = re => H.findIndex(h => re.test(h));
-    const C = { sid: col(/학번/), name: col(/^이름/), slot: col(/^우리\s*모둠$/), q1Why: col(/^1-①/), q1Limit: col(/^1-②/),
-      q2Mitosis: col(/^2-①/), q2Meiosis: col(/^2-②/), q3: col(/^3\./), q4Fact: col(/^4-①/), q4Life: col(/^4-②/) };
-    const mediaCols = H.map((h, i) => /표현할\s*매체/.test(h) ? i : -1).filter(i => i >= 0); // 우리 모둠 매체별 갈림길이라 3열 중 하나만 채워짐
-    const out = {};
-    r.rows.forEach(row => {
-      const g = k => C[k] >= 0 ? String(row[C[k]] ?? '').trim() : '';
-      const sid = g('sid').replace(/\D/g, '');
-      if (sid.length !== 4) return;
-      const ts = typeof row[0] === 'number' ? row[0] : 0;
-      if (out[sid] && out[sid].ts > ts) return; // 여러 번 냈으면 마지막 것
-      const sl = DC.SLOTS.find(x => x.no === parseInt(g('slot'), 10)); // "3모둠 · 🤸 신체표현 · 🔵 체세포 분열"
-      const other = mediaCols.map(i => String(row[i] ?? '').trim()).find(Boolean) || '';
-      const a = { mySlot: sl ? sl.id : '', myMedia: sl ? sl.media : '', myDivision: sl ? sl.div : '', otherMedia: other.replace(/^[^가-힣]+/, '') };
-      ['q1Why', 'q1Limit', 'q2Mitosis', 'q2Meiosis', 'q3', 'q4Fact', 'q4Life'].forEach(k => { a[k] = g(k); });
-      out[sid] = { ts, name: g('name'), answers: a };
-    });
+    const { out, miss } = DC.parseDivReal(r); // 열 해석은 crit.js
     dreal = out;
-    const miss = Object.keys(C).filter(k => C[k] < 0).concat(mediaCols.length ? [] : ['otherMedia']);
     drealInfo = `세포 실전 ${Object.keys(out).length}명${miss.length ? ` (못 찾은 열: ${miss.join(', ')})` : ''}`;
   } catch (e) { dreal = {}; drealInfo = '세포 실전 불러오기 실패: ' + e.message; }
 }
@@ -246,6 +173,7 @@ async function init() {
   if (firstActive) sel.value = firstActive;
   loadClass();
   loadChatConfig();
+  loadScoreConfig();
 }
 
 window.loadClass = async function () {
@@ -422,6 +350,53 @@ window.saveChatLimit = async function () {
   loadChatConfig();
 };
 
+// 학생 점수 확인판(my-score.html) 공개 여부: scoreConfig = { open, changedAt } — 꺼져 있으면 학생은 제출 내용·기준만 보고 점수는 "공개 전"
+async function loadScoreConfig() {
+  const c = (await DC.get('scoreConfig').catch(() => null)) || {};
+  const b = document.getElementById('scoreToggle');
+  b.textContent = c.open ? `📊 학생 점수 공개 중 (누르면 숨기기)` : `🔒 학생 점수 숨김${c.changedAt ? ' · ' + DC.fmtTime(c.changedAt) : ''} (누르면 공개)`;
+  b.style.color = c.open ? 'var(--danger)' : '';
+  b.dataset.open = c.open ? '1' : '';
+}
+window.toggleScore = async function () {
+  const open = !document.getElementById('scoreToggle').dataset.open;
+  if (!confirm(open ? '모든 반 학생의 점수 확인판에 점수를 공개할까요? (채점 안 한 항목은 "채점 전"으로 보여요)' : '학생 점수 확인판에서 점수를 숨길까요?')) return;
+  await DC.put('scoreConfig', { open, changedAt: Date.now() });
+  loadScoreConfig();
+};
+
+// 실전 미제출 모아보기 — 3학년 모든 반. 그 반에서 한 명이라도 낸 시험만 "치른 시험"으로 보고 미제출자를 모은다
+window.showMissing = async function () {
+  document.getElementById('modalBody').innerHTML = '<div class="loading-state">불러오는 중...</div>';
+  document.getElementById('modal').classList.add('show');
+  await Promise.all([loadReal(), loadDivReal()]);
+  const tests = [['🐼 판다 실전', real], ['🔬 세포분열 실전', dreal]];
+  const bans = {};
+  Object.entries(roster).forEach(([id, s]) => { if (String(s.grade) === '3') (bans[`${s.grade}-${s.ban}`] = bans[`${s.grade}-${s.ban}`] || []).push({ id, name: s.name, num: s.num }); });
+  const order = Object.keys(bans).sort((a, b) => +a.split('-')[1] - +b.split('-')[1]);
+  let text = [], h = '', total = 0;
+  order.forEach(b => {
+    const st = bans[b].sort((x, y) => x.num - y.num);
+    h += `<div class="sec"><h4>${DC.esc(DC.banLabel(b))} <span class="dc-muted" style="font-weight:400">· ${st.length}명</span></h4>`;
+    tests.forEach(([label, d]) => {
+      const done = st.filter(s => d[s.id]), miss = st.filter(s => !d[s.id]);
+      if (!done.length) { h += `<div style="font-size:0.84rem;margin:4px 0"><b>${label}</b> <span class="dc-muted">— 아직 안 치름</span></div>`; return; }
+      total += miss.length;
+      if (miss.length) text.push(`${DC.banLabel(b)} ${label.replace(/^\S+\s/, '')} 미제출: ${miss.map(s => `${s.num}번 ${s.name}`).join(', ')}`);
+      h += `<div style="font-size:0.84rem;margin:4px 0"><b>${label}</b> ${miss.length
+        ? `<span style="color:var(--danger);font-weight:700">미제출 ${miss.length}명</span> — ${miss.map(s => `${s.num}번 ${DC.esc(s.name)}`).join(', ')}`
+        : '<span style="color:#2f9e44;font-weight:700">모두 제출 ✓</span>'} <span class="dc-muted">(제출 ${done.length}/${st.length})</span></div>`;
+    });
+    h += '</div>';
+  });
+  document.getElementById('modalBody').innerHTML =
+    `<div class="mhead"><h3>🚨 실전 미제출 모아보기 <span class="dc-muted" style="font-size:0.8rem">· 미제출 총 ${total}명 · ${new Date().toLocaleTimeString()} 기준</span></h3>` +
+    `<button class="btn small secondary" id="missCopy">📋 명단 복사</button><button class="btn small secondary" onclick="closeModal()">닫기</button></div>` +
+    '<p class="hint">반에서 한 명이라도 제출한 시험만 미제출로 셉니다. 학생 점수 확인판 맨 위에도 같은 안내("선생님께 찾아오세요")가 떠요.</p>' + h;
+  document.getElementById('missCopy').onclick = () => navigator.clipboard.writeText(text.join('\n') || '미제출 없음')
+    .then(() => { document.getElementById('missCopy').textContent = '✓ 복사됨'; });
+};
+
 window.closeModal = function () { document.getElementById('modal').classList.remove('show'); renderGrid(); };
 
 window.setScore = function (cid, p) {
@@ -450,6 +425,7 @@ document.addEventListener('keydown', e => {
   if (!document.getElementById('modal').classList.contains('show')) return;
   if (e.target.tagName === 'INPUT') return;
   if (e.key === 'Escape') closeModal();
+  if (document.getElementById('missCopy')) return; // 미제출 모아보기 창에서는 화살표로 학생 넘기기 안 함
   if (e.key === 'ArrowRight' && curIdx < list.length - 1) openStu(curIdx + 1);
   if (e.key === 'ArrowLeft' && curIdx > 0) openStu(curIdx - 1);
 });

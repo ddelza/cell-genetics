@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>내 점수 확인 — 세포분열과 유전 표현하기</title>
+<link rel="stylesheet" href="common.css?v=5">
+<style>
+.alert { border-radius: 14px; padding: 14px 16px; margin-bottom: 14px; font-size: 0.9rem; line-height: 1.65; }
+.alert.miss { background: var(--danger-soft); border: 2px solid #f1a9a0; color: #8a1f12; }
+.alert.miss b.big { display: block; font-size: 1.02rem; margin-bottom: 4px; }
+.alert.miss ul { margin: 6px 0; padding-left: 20px; font-weight: 700; }
+.alert.ok { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.alert.info { background: #f1f3f5; color: #555; }
+.total { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.total .num { font-size: 2rem; font-weight: 800; color: var(--accent); }
+.total .of { font-size: 1rem; color: var(--text-muted); font-weight: 700; }
+.areas { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 10px; }
+.areas div { background: var(--bg); border-radius: 10px; padding: 8px 10px; font-size: 0.78rem; color: var(--text-muted); }
+.areas b { display: block; font-size: 1.05rem; color: var(--text); }
+.sec h2 { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.sec h2 small { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; white-space: nowrap; }
+.picks { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 2px; }
+.picks span { background: #f2f4fa; border-radius: 8px; padding: 5px 10px; font-size: 0.8rem; }
+.picks span b { color: var(--accent); margin-right: 4px; }
+.item { border-top: 1px dashed #dde3ea; padding-top: 12px; margin-top: 12px; }
+.item-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.item-head h3 { margin: 0; font-size: 0.9rem; }
+.pill { flex-shrink: 0; font-weight: 800; font-size: 0.86rem; border-radius: 999px; padding: 3px 12px; background: var(--accent-soft); color: var(--accent); }
+.pill.full { background: var(--accent); color: #fff; }
+.pill.wait { background: #f1f3f5; color: #999; font-weight: 600; }
+.ans { margin-top: 6px; }
+.ans b { display: block; font-size: 0.74rem; color: var(--accent); margin-top: 8px; }
+.ans div { white-space: pre-wrap; word-break: break-word; font-size: 0.88rem; line-height: 1.6; background: #f8f9fc; border-radius: 8px; padding: 8px 10px; }
+.ans .none { color: #bbb; }
+.ans .nosub { color: var(--danger); background: var(--danger-soft); font-weight: 700; }
+.rub { margin-top: 8px; font-size: 0.78rem; line-height: 1.5; }
+.rub div { display: flex; gap: 8px; padding: 4px 8px; border-radius: 8px; color: #666; }
+.rub i { font-style: normal; font-weight: 800; min-width: 28px; color: var(--accent); }
+.rub div.mine { background: #fff3bf; color: #4a3b00; font-weight: 600; box-shadow: inset 3px 0 0 #fab005; }
+.rub div.mine::after { content: '← 내 점수'; margin-left: auto; white-space: nowrap; color: #c08a00; font-weight: 800; }
+.peer-row { background: #f8f9fc; border-radius: 8px; padding: 8px 10px; margin-top: 6px; font-size: 0.84rem; line-height: 1.55; }
+.peer-row b { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="dc-head"></div>
+  <div id="main"><div class="loading-state">불러오는 중...</div></div>
+</div>
+
+<script src="session.js?v=5"></script>
+<script src="cg.js?v=6"></script>
+<script src="crit.js?v=1"></script>
+<script>
+// 판다쌤 웹앱(gas/Code.gs) — {action:'mine'}로 두 실전 응답 시트에서 내 행만 받아 온다
+const SERVER_URL = 'https://script.google.com/macros/s/AKfycby5omdOfIpwg5KlOCwMS5L5zwbfZuF97qz8LyW-MUQWnKer11zBdh0CgAs-cPJ8CeH4/exec';
+const CRIT = DC.CRIT, MAX_TOTAL = CRIT.reduce((s, c) => s + c.max, 0);
+const AREAS = [
+  { src: 'panda', icon: '🐼', title: '활동 1 · 판다로 확인하는 멘델의 유전법칙', short: '판다 유전 논술', test: '🐼 판다 유전 논술 (실전 · 구글폼)' },
+  { src: 'essay', icon: '🔬', title: '활동 2 · 세포분열 표현하기 개인 논술', short: '세포분열 논술', test: '🔬 세포분열 개인 논술 (실전 · 구글폼)' },
+  { src: 'peer', icon: '💬', title: '활동 2 · 모둠 발표 동료평가', short: '동료평가' },
+];
+const has = v => v !== undefined && v !== null && v !== '';
+
+function ansText(v) {
+  if (v && typeof v === 'object') { // 판다 결과표 (실전 폼에 적은 숫자)
+    const rows = [['g', '우리 모둠'], ['c', '반 전체']].filter(([k]) => has(v[k + 'b']) || has(v[k + 'r']))
+      .map(([k, l]) => `${l}: 검정 ${v[k + 'b'] || '-'} / 갈색 ${v[k + 'r'] || '-'}`);
+    return rows.length ? `<div>${DC.esc(rows.join('\n'))}</div>` : '<div class="none">(빈칸)</div>';
+  }
+  return has(v) && String(v).trim() ? `<div>${DC.esc(v)}</div>` : '<div class="none">(빈칸)</div>';
+}
+
+// 판다 실전 레코드의 counts{gb,gr,cb,cr} → ansText가 읽는 {gb,gr,cb,cr} 그대로 쓰도록 맞춤
+function pandaVal(rec, f) { return f === 'counts' ? rec.counts : rec[f]; }
+
+function rubricHtml(c, my) {
+  return '<div class="rub">' + c.rubric.map(([t, rows]) => (t ? `<div style="font-weight:700">${DC.esc(t)}</div>` : '') +
+    rows.map(([p, d]) => `<div class="${has(my) && +my === p ? 'mine' : ''}"><i>${p}점</i><span>${DC.esc(d)}</span></div>`).join('')).join('') + '</div>';
+}
+
+function itemHtml(c, bodyHtml, sc, open) {
+  const v = sc ? sc[c.id] : undefined;
+  const pill = !open ? '<span class="pill wait">공개 전</span>'
+    : has(v) ? `<span class="pill${+v === c.max ? ' full' : ''}">${v} / ${c.max}점</span>` : '<span class="pill wait">채점 전</span>';
+  return `<div class="item"><div class="item-head"><h3>${DC.esc(c.label)}</h3>${pill}</div>${bodyHtml}` +
+    // 점수가 있으면 기준표를 펼쳐 내 점수 줄을 노랗게, 아직 없으면 접어 둔다(화면이 너무 길어지지 않게)
+    (open && has(v) ? rubricHtml(c, v) : `<details><summary class="dc-muted" style="cursor:pointer;margin-top:6px">📋 평가 기준 보기</summary>${rubricHtml(c)}</details>`) + '</div>';
+}
+
+DC.start({ title: '📊 내 점수 확인', subtitle: '세포분열과 유전 표현하기 · 수행평가 ' + MAX_TOTAL + '점' }).then(async () => {
+  const me = DC.student, ban = DC.myBan(), main = document.getElementById('main');
+  if (DC.isGuest()) { main.innerHTML = '<div class="alert info">🧪 체험 모드에서는 점수 확인판을 볼 수 없어요. 학번과 이름으로 로그인해 주세요.</div>'; return; }
+
+  const [sc, conf, pick, peerAll, srv] = await Promise.all([
+    DC.get(`scores/${ban}/${me.id}`).catch(() => null),
+    DC.get('scoreConfig').catch(() => null),
+    DC.get(`pick/${ban}/${me.id}`).catch(() => null),
+    DC.get(`peer/${ban}`).catch(() => null),
+    fetch(SERVER_URL, { method: 'POST', body: JSON.stringify({ action: 'mine', id: me.id, name: me.name }) }) // text/plain → CORS 사전 요청 없음
+      .then(r => r.json()).catch(e => ({ ok: false, error: e.message })),
+  ]);
+  const open = !!(conf && conf.open) || me.isTeacher;
+
+  // 실전 제출 기록
+  const real = { panda: null, essay: null }, held = { panda: false, essay: false };
+  let srvErr = '';
+  if (srv && srv.ok && srv.panda && srv.div) {
+    if (!srv.panda.error) { real.panda = DC.parsePandaReal(srv.panda).out[me.id] || null; held.panda = !!srv.panda.classHeld; }
+    if (!srv.div.error) { real.essay = DC.parseDivReal(srv.div).out[me.id] || null; held.essay = !!srv.div.classHeld; }
+    if (srv.panda.error || srv.div.error) srvErr = '일부 실전 기록을 불러오지 못했어요.';
+  } else srvErr = '실전 제출 기록을 불러오지 못했어요' + (srv && srv.error ? ` (${srv.error})` : '') + '. 잠시 뒤 새로고침해 주세요.';
+
+  // 동료평가: peer/{반}/{발표 칸}/{평가자}
+  const myPeer = DC.SLOTS.filter(s => peerAll && peerAll[s.id] && peerAll[s.id][me.id]).map(s => Object.assign({ slot: s.id }, peerAll[s.id][me.id]));
+  const peerNeed = DC.SLOTS.length - (pick && DC.slot(pick.slot) ? 1 : 0);
+
+  let h = '';
+  // ---------- 맨 위: 실전 미제출 안내 ----------
+  const missing = AREAS.filter(a => a.test && held[a.src] && !real[a.src]);
+  if (missing.length) {
+    h += `<div class="alert miss"><b class="big">⚠️ 아직 제출하지 않은 실전 평가가 있어요!</b>` +
+      `<ul>${missing.map(a => `<li>${a.test}</li>`).join('')}</ul>` +
+      `이 평가는 점수에 들어가요. <b>김병선 선생님께 꼭 찾아와서</b> 언제 응시할 수 있는지 안내받으세요. 🙋</div>`;
+  } else if (!srvErr && AREAS.every(a => !a.test || real[a.src])) {
+    h += '<div class="alert ok">✅ 실전 평가 2개를 모두 제출했어요.</div>';
+  }
+  const notYet = AREAS.filter(a => a.test && !held[a.src] && !real[a.src]);
+  if (!srvErr && notYet.length) h += `<div class="alert info">📅 ${notYet.map(a => a.short).join(', ')} 실전은 우리 반이 아직 치르기 전이에요.</div>`;
+  if (srvErr) h += `<div class="alert info">⚠️ ${DC.esc(srvErr)}</div>`;
+
+  // ---------- 총점 ----------
+  const areaSum = a => CRIT.filter(c => c.src === a.src).reduce((s, c) => s + (sc && has(sc[c.id]) ? +sc[c.id] : 0), 0);
+  const areaMax = a => CRIT.filter(c => c.src === a.src).reduce((s, c) => s + c.max, 0);
+  const graded = CRIT.filter(c => sc && has(sc[c.id])).length;
+  h += '<div class="card">' + (open
+    ? `<div class="total"><span class="num">${AREAS.reduce((s, a) => s + areaSum(a), 0)}</span><span class="of">/ ${MAX_TOTAL}점</span>` +
+      `<span class="dc-muted">${graded < CRIT.length ? `채점된 항목 ${graded} / ${CRIT.length} — 나머지는 채점 중이에요` : '모든 항목 채점 완료'}</span></div>` +
+      `<div class="areas">${AREAS.map(a => `<div>${a.icon} ${a.short}<b>${areaSum(a)} / ${areaMax(a)}</b></div>`).join('')}</div>`
+    : `<h2>🔒 점수는 아직 공개 전이에요</h2><p class="hint" style="margin:0">선생님이 채점을 마치고 공개하면 여기에 점수가 보여요. 지금은 내가 제출한 내용과 평가 기준을 미리 확인할 수 있어요.</p>`) +
+    `<p class="hint" style="margin:10px 0 0">아래에서 <b>내가 고른 것·쓴 내용</b>과 <b>점수</b>, 그 점수에 해당하는 <b>평가 기준(노란 줄)</b>을 함께 볼 수 있어요. 점수가 이해되지 않으면 선생님께 질문하세요.</p></div>`;
+
+  // ---------- 영역별 ----------
+  AREAS.forEach(a => {
+    const crits = CRIT.filter(c => c.src === a.src);
+    h += `<div class="card sec"><h2>${a.icon} ${a.title} <small>${open ? `${areaSum(a)} / ` : ''}${areaMax(a)}점</small></h2>`;
+    if (a.src === 'panda') {
+      const r = real.panda;
+      h += r ? `<div class="picks"><span><b>제출</b>${DC.fmtTime(r.ts)}</span>${r.role ? `<span><b>나의 역할</b>${DC.esc(r.role)}</span>` : ''}</div>`
+        : '<div class="ans"><div class="nosub">실전 미제출</div></div>';
+      crits.forEach(c => {
+        const body = r ? '<div class="ans">' + c.fields.map(([f, l]) => `<b>${DC.esc(l)}</b>${ansText(pandaVal(r, f))}`).join('') + '</div>' : '';
+        h += itemHtml(c, body, sc, open);
+      });
+    } else if (a.src === 'essay') {
+      const r = real.essay, ea = r ? r.answers : {};
+      h += r ? `<div class="picks"><span><b>제출</b>${DC.fmtTime(r.ts)}</span><span><b>우리 모둠</b>${DC.esc(DC.slotLabel(ea.mySlot) || '-')}</span>` +
+        `<span><b>문항 2 매체</b>${DC.esc((DC.MEDIA_ICON[ea.otherMedia] || '') + ' ' + (ea.otherMedia || '-'))}</span></div>`
+        : '<div class="ans"><div class="nosub">실전 미제출</div></div>';
+      crits.forEach(c => {
+        const fs = c.fields.filter(([f]) => !['mySlot', 'otherMedia'].includes(f)); // 모둠·매체는 위 칩으로
+        const body = r ? '<div class="ans">' + fs.map(([f, l]) => `<b>${DC.esc(l)}</b>${ansText(ea[f])}`).join('') + '</div>' : '';
+        h += itemHtml(c, body, sc, open);
+      });
+    } else {
+      const body = `<div class="picks"><span><b>평가한 모둠</b>${myPeer.length} / ${peerNeed}</span>${pick && DC.slot(pick.slot) ? `<span><b>우리 모둠</b>${DC.esc(DC.slotLabel(pick.slot))}</span>` : ''}</div>` +
+        (myPeer.length ? myPeer.map(p => `<div class="peer-row"><b>${DC.esc(DC.slotLabel(p.slot))}</b> · 기억에 남는 단계: <b>${DC.esc(p.stage)}</b><br>${DC.nl2br(p.how)}<br>💬 ${DC.esc(p.cheer)}</div>`).join('')
+          : '<div class="ans"><div class="none">(동료평가 기록 없음)</div></div>');
+      crits.forEach(c => { h += itemHtml(c, body, sc, open); });
+    }
+    h += '</div>';
+  });
+  main.innerHTML = h;
+});
+</script>
+</body>
+</html>

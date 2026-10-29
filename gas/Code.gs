@@ -63,9 +63,38 @@ function sheetRows_(sh) {
   return { ok: true, header: (v[0] || []).map(String), rows: v.slice(1).map(r => r.map(fix)) };
 }
 
+// 학생 점수 확인판(my-score.html): 학번·이름이 명단과 맞으면 두 실전 응답 시트에서 그 학생 행만 돌려준다
+// (남의 답은 보내지 않는다. 이름이 URL에 남지 않게 POST로 받는다)
+function readMine(req) {
+  const id = String(req.id || '').trim(), name = String(req.name || '').trim();
+  const cfgYear = (fbGet('/config/current') || {}).year || new Date().getFullYear();
+  const s = id === TEACHER.id && name === TEACHER.name ? { grade: 'T', ban: '', name: name } // 교사 계정으로 화면 확인용 (빈 결과)
+    : /^\d{4}$/.test(id) ? fbGet('/years/' + cfgYear + '/students/' + id) : null;
+  if (!s || String(s.name).trim() !== name) return { ok: false, error: '학번·이름을 확인할 수 없어요. 처음 화면에서 다시 로그인해 주세요.' };
+  const only = r => {
+    const H = r.header, sid = H.findIndex(h => /학번/.test(h)), em = H.findIndex(h => /이메일|email/i.test(h));
+    const rowId = row => { // teacher.html과 같은 규칙: 학번 칸이 4자리가 아니면 이메일 속 4자리 숫자
+      const v = String(row[sid] ?? '').replace(/\D/g, '');
+      return v.length === 4 ? v : em >= 0 ? (String(row[em]).match(/\d{4}/) || [''])[0] : '';
+    };
+    // classHeld: 우리 반에서 한 명이라도 냈는지 — 아직 시험을 안 본 반에 "미제출" 경고를 띄우지 않으려고
+    // (이 학교 학번 = 학년 1자리 + 반 1자리 + 번호 2자리)
+    const pre = String(s.grade) + String(s.ban);
+    return { header: H, rows: r.rows.filter(row => rowId(row) === id),
+      classHeld: r.rows.some(row => { const v = rowId(row); return v.length === 4 && v.indexOf(pre) === 0; }) };
+  };
+  const out = { ok: true };
+  [['panda', readEssays], ['div', readDivEssays]].forEach(([k, read]) => {
+    try { out[k] = only(read()); } catch (err) { out[k] = { error: String(err.message || err) }; }
+  });
+  return out;
+}
+
 function doPost(e) {
   try {
-    return json(handle(JSON.parse(e.postData.contents)));
+    const req = JSON.parse(e.postData.contents);
+    if (req.action === 'mine') return json(readMine(req));
+    return json(handle(req));
   } catch (err) {
     console.error(err);
     if (err.busy) return json({ ok: false, busy: true, error: '판다쌤이 지금 너무 바빠요. 잠시 뒤 자동으로 다시 보낼게요…' });
