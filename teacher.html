@@ -106,7 +106,7 @@ table.grid { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
 
 <script src="session.js?v=5"></script>
 <script src="cg.js?v=6"></script>
-<script src="crit.js?v=1"></script>
+<script src="crit.js?v=2"></script>
 <script>
 const PASSWORD = 'byung0703!';
 
@@ -295,7 +295,7 @@ window.openStu = function (i) {
       h += '<div class="crit"><div class="ans">' + (src === 'peer' ? peerHtml(s.id) : '') + c.fields.map(([f, l]) => src === 'panda' ? pandaField(s.id, f, l, a) : src === 'essay' ? essayField(s.id, f, l) : `<b>${DC.esc(l)}</b>${ansText(a[f])}`).join('') +
         (c.id === 'p5' ? `<b>연습 전체 피드백</b>${fbBox(s.id, 'all')}` : '') + '</div>' +
         `<div class="scorebox"><div class="ttl">${DC.esc(c.label)} <span class="dc-muted">/${c.max}</span></div>` +
-        `<div class="pts" data-crit="${c.id}">` + Array.from({ length: c.max + 1 }, (_, p) => `<button class="${has(sc[c.id]) && +sc[c.id] === p ? 'on' : ''}" onclick="setScore('${c.id}',${p})">${p}</button>`).join('') +
+        `<div class="pts" data-crit="${c.id}">` + Array.from({ length: c.max - (c.min || 0) + 1 }, (_, i) => i + (c.min || 0)).map(p => `<button data-p="${p}" class="${has(sc[c.id]) && +sc[c.id] === p ? 'on' : ''}" onclick="setScore('${c.id}',${p})">${p}</button>`).join('') +
         `<button class="clear" onclick="setScore('${c.id}',null)">지우기</button></div>` +
         (c.note ? `<div class="dc-muted" style="font-size:0.74rem;margin-bottom:4px">${DC.esc(c.note)}</div>` : '') +
         '<div class="rub">' + c.rubric.map(([t, rows]) => (t ? `<div style="font-weight:700;margin-top:4px">${DC.esc(t)}</div>` : '') + rows.map(([p, d]) => `<div><i>${p}</i> ${DC.esc(d)}</div>`).join('')).join('') + '</div>' +
@@ -400,7 +400,7 @@ window.showMissing = async function () {
 window.closeModal = function () { document.getElementById('modal').classList.remove('show'); renderGrid(); };
 
 window.setScore = function (cid, p) {
-  document.querySelectorAll(`.pts[data-crit="${cid}"] button:not(.clear)`).forEach((b, i) => b.classList.toggle('on', i === p));
+  document.querySelectorAll(`.pts[data-crit="${cid}"] button:not(.clear)`).forEach(b => b.classList.toggle('on', +b.dataset.p === p)); // 최하점이 1점인 항목은 버튼이 1부터
   saveScores({ [cid]: p });
 };
 
