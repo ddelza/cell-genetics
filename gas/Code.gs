@@ -34,12 +34,15 @@ const DEFAULT_DAILY_LIMIT = 40; // 학생 1명 하루 질문 수 (chatConfig/dai
 const ESSAY_SHEET_ID = '18B-5XHxYmU6JHCGdIJqZW2zCsRGhCy_Jm8B4LdGHpEw';
 const ESSAY_GID = 1522610830;
 const TEACHER_PW = 'byung0703!'; // teacher.html과 같은 비밀번호
+// 세포분열 실전 논술(구글폼 시험 모드) 응답 시트 — ?action=divEssays&pw=… (2026-10-29 만든 폼)
+const DIV_SHEET_ID = '13OaLT0DkTGPHWhE6k2qeF8iDT27w2GDVZwgGrI5WooQ';
 
 function doGet(e) {
   const p = (e && e.parameter) || {};
-  if (p.action === 'essays') {
+  const read = { essays: readEssays, divEssays: readDivEssays }[p.action];
+  if (read) {
     if (p.pw !== TEACHER_PW) return json({ ok: false, error: '비밀번호가 다릅니다' });
-    try { return json(readEssays()); } catch (err) { return json({ ok: false, error: String(err.message || err) }); }
+    try { return json(read()); } catch (err) { return json({ ok: false, error: String(err.message || err) }); }
   }
   return json({ ok: true, service: 'panda-coach' });
 }
@@ -47,7 +50,14 @@ function doGet(e) {
 // 응답 시트를 머리글 + 행 그대로 돌려준다 (열 해석은 teacher.html에서 머리글 글자로 한다 — 폼 문항 순서가 바뀌어도 안전)
 function readEssays() {
   const ss = SpreadsheetApp.openById(ESSAY_SHEET_ID);
-  const sh = ss.getSheets().filter(x => x.getSheetId() === ESSAY_GID)[0] || ss.getSheets()[0];
+  return sheetRows_(ss.getSheets().filter(x => x.getSheetId() === ESSAY_GID)[0] || ss.getSheets()[0]);
+}
+// 스크립트로 만든 폼은 응답 탭이 '시트1' 뒤에 붙으므로, 폼이 연결된 탭을 찾아 읽는다
+function readDivEssays() {
+  const ss = SpreadsheetApp.openById(DIV_SHEET_ID);
+  return sheetRows_(ss.getSheets().filter(x => x.getFormUrl())[0] || ss.getSheets()[0]);
+}
+function sheetRows_(sh) {
   const v = sh.getDataRange().getValues();
   const fix = x => x instanceof Date ? x.getTime() : (x === null || x === undefined ? '' : x);
   return { ok: true, header: (v[0] || []).map(String), rows: v.slice(1).map(r => r.map(fix)) };

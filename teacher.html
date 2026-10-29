@@ -183,6 +183,37 @@ async function loadReal() {
   } catch (e) { real = {}; realInfo = '실전 불러오기 실패: ' + e.message; }
 }
 
+// 세포분열 실전 = 구글폼(시험 모드) 응답 시트(같은 웹앱 ?action=divEssays). 연습 = division-essay.html(Firebase)
+// dreal: 학번 → { ts, name, answers } — answers는 연습(essay/{반}/{학번}.answers)과 같은 키라 CRIT.fields를 그대로 쓴다
+let dreal = {}, drealInfo = '';
+async function loadDivReal() {
+  try {
+    const r = await fetch(ESSAY_URL + '?action=divEssays&pw=' + encodeURIComponent(PASSWORD)).then(x => x.json());
+    if (!r.ok) throw new Error(r.error || '불러오기 실패');
+    if (!r.header) throw new Error('Apps Script(Code.gs)를 새 버전으로 다시 배포해 주세요');
+    const H = r.header.map(h => String(h).trim()), col = re => H.findIndex(h => re.test(h));
+    const C = { sid: col(/학번/), name: col(/^이름/), slot: col(/^우리\s*모둠$/), q1Why: col(/^1-①/), q1Limit: col(/^1-②/),
+      q2Mitosis: col(/^2-①/), q2Meiosis: col(/^2-②/), q3: col(/^3\./), q4Fact: col(/^4-①/), q4Life: col(/^4-②/) };
+    const mediaCols = H.map((h, i) => /표현할\s*매체/.test(h) ? i : -1).filter(i => i >= 0); // 우리 모둠 매체별 갈림길이라 3열 중 하나만 채워짐
+    const out = {};
+    r.rows.forEach(row => {
+      const g = k => C[k] >= 0 ? String(row[C[k]] ?? '').trim() : '';
+      const sid = g('sid').replace(/\D/g, '');
+      if (sid.length !== 4) return;
+      const ts = typeof row[0] === 'number' ? row[0] : 0;
+      if (out[sid] && out[sid].ts > ts) return; // 여러 번 냈으면 마지막 것
+      const sl = DC.SLOTS.find(x => x.no === parseInt(g('slot'), 10)); // "3모둠 · 🤸 신체표현 · 🔵 체세포 분열"
+      const other = mediaCols.map(i => String(row[i] ?? '').trim()).find(Boolean) || '';
+      const a = { mySlot: sl ? sl.id : '', myMedia: sl ? sl.media : '', myDivision: sl ? sl.div : '', otherMedia: other.replace(/^[^가-힣]+/, '') };
+      ['q1Why', 'q1Limit', 'q2Mitosis', 'q2Meiosis', 'q3', 'q4Fact', 'q4Life'].forEach(k => { a[k] = g(k); });
+      out[sid] = { ts, name: g('name'), answers: a };
+    });
+    dreal = out;
+    const miss = Object.keys(C).filter(k => C[k] < 0).concat(mediaCols.length ? [] : ['otherMedia']);
+    drealInfo = `세포 실전 ${Object.keys(out).length}명${miss.length ? ` (못 찾은 열: ${miss.join(', ')})` : ''}`;
+  } catch (e) { dreal = {}; drealInfo = '세포 실전 불러오기 실패: ' + e.message; }
+}
+
 window.checkPw = function () {
   if (document.getElementById('pwInput').value !== PASSWORD) {
     const e = document.getElementById('pwError'); e.textContent = '비밀번호가 다릅니다.'; e.classList.add('show'); return;
@@ -220,9 +251,9 @@ async function init() {
 window.loadClass = async function () {
   curBan = document.getElementById('banSelect').value;
   document.getElementById('loadInfo').textContent = '불러오는 중...';
-  const [p, e, s, f, pr, pk] = await Promise.all(['panda', 'essay', 'scores', 'pandaFb', 'peer', 'pick'].map(k => DC.get(`${k}/${curBan}`).catch(() => null)).concat([loadReal()]));
+  const [p, e, s, f, pr, pk] = await Promise.all(['panda', 'essay', 'scores', 'pandaFb', 'peer', 'pick'].map(k => DC.get(`${k}/${curBan}`).catch(() => null)).concat([loadReal(), loadDivReal()]));
   panda = p || {}; essay = e || {}; scores = s || {}; pfb = f || {}; peer = pr || {}; picks = pk || {};
-  document.getElementById('loadInfo').textContent = `불러옴 ${new Date().toLocaleTimeString()} · ${realInfo}`;
+  document.getElementById('loadInfo').textContent = `불러옴 ${new Date().toLocaleTimeString()} · 판다 ${realInfo} · ${drealInfo}`;
   list = students();
   renderGrid();
 };
@@ -240,22 +271,23 @@ function total(sc) { return sc ? CRIT.reduce((s, c) => s + (has(sc[c.id]) ? +sc[
 function graded(sc) { return sc ? CRIT.filter(c => has(sc[c.id])).length : 0; }
 
 function renderGrid() {
-  let h = '<tr><th>번호</th><th>이름</th><th>판다<br>실전</th><th>판다<br>연습</th><th title="세포분열 개인 논술 연습장(division-essay.html)에 저장했는지 — 판다 논술과 무관">세포 논술<br>연습</th><th>모둠<small>매체·분열 → 문항2</small></th>' +
+  let h = '<tr><th>번호</th><th>이름</th><th>판다<br>실전</th><th>판다<br>연습</th><th title="세포분열 개인 논술평가(구글폼 시험 모드) 응답 시트에 있는지">세포 논술<br>실전</th><th title="세포분열 개인 논술 연습장(division-essay.html)에 저장했는지">세포 논술<br>연습</th><th>모둠<small>매체·분열 → 문항2</small></th>' +
     CRIT.map(c => `<th>${c.short}<small>/${c.max}</small></th>`).join('') + `<th>합계<small>/${MAX_TOTAL}</small></th><th>메모</th></tr>`;
   list.forEach((s, i) => {
-    const p = panda[s.id], e = essay[s.id], sc = scores[s.id];
-    const ea = e && e.answers || {};
+    const p = panda[s.id], e = essay[s.id], d = dreal[s.id], sc = scores[s.id];
+    const ea = (d || e || {}).answers || {}; // 모둠 칸은 실전 답 우선, 없으면 연습
     h += `<tr class="stu" onclick="openStu(${i})"><td>${s.num || ''}</td><td class="name">${DC.esc(s.name)}</td>` +
       (real[s.id] ? `<td class="done" title="${DC.fmtTime(real[s.id].ts)}">✓</td>` : '<td class="miss">·</td>') +
       (p ? `<td class="done" style="color:#aaa" title="${DC.fmtTime(p.updatedAt)}">✓</td>` : '<td class="miss">·</td>') +
-      (e ? `<td class="done" title="${DC.fmtTime(e.updatedAt)}">✓</td>` : '<td class="miss">·</td>') +
-      `<td title="${DC.escAttr(DC.slotLabel(ea.mySlot))}">${e ? `${DC.MEDIA_ICON[ea.myMedia] || ''}${DC.DIV_ICON[ea.myDivision] || ''}→${DC.MEDIA_ICON[ea.otherMedia] || ''}` : ''}</td>` +
+      (d ? `<td class="done" title="${DC.fmtTime(d.ts)}">✓</td>` : '<td class="miss">·</td>') +
+      (e ? `<td class="done" style="color:#aaa" title="${DC.fmtTime(e.updatedAt)}">✓</td>` : '<td class="miss">·</td>') +
+      `<td title="${DC.escAttr(DC.slotLabel(ea.mySlot))}">${d || e ? `${DC.MEDIA_ICON[ea.myMedia] || ''}${DC.DIV_ICON[ea.myDivision] || ''}→${DC.MEDIA_ICON[ea.otherMedia] || ''}` : ''}</td>` +
       CRIT.map(c => sc && has(sc[c.id]) ? `<td class="sc">${sc[c.id]}</td>` : '<td class="sc empty">-</td>').join('') +
       `<td class="total">${graded(sc) ? total(sc) : ''}</td><td class="memo">${sc && sc.memo ? DC.esc(sc.memo) : ''}</td></tr>`;
   });
   const cnt = d => list.filter(s => d[s.id]).length;
   const avg = c => { const v = list.map(s => scores[s.id]).filter(sc => sc && has(sc[c.id])).map(sc => +sc[c.id]); return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toFixed(1) : '-'; };
-  h += `<tr class="sum"><td></td><td class="name">${list.length}명</td><td>${cnt(real)}</td><td>${cnt(panda)}</td><td>${cnt(essay)}</td><td></td>` +
+  h += `<tr class="sum"><td></td><td class="name">${list.length}명</td><td>${cnt(real)}</td><td>${cnt(panda)}</td><td>${cnt(dreal)}</td><td>${cnt(essay)}</td><td></td>` +
     CRIT.map(c => `<td title="평균">${avg(c)}</td>`).join('') + '<td></td><td></td></tr>';
   document.getElementById('grid').innerHTML = h;
 }
@@ -266,6 +298,14 @@ function pandaField(id, f, l, prac) {
   return `<b>${DC.esc(l)}</b>` +
     (r ? `<span class="tag real">실전</span>${ansText(r[f])}` : '<div class="nosub">실전 미제출</div>') +
     `<div class="prac"><span class="tag prac">연습</span>${ansText(prac[f])}</div>` + fbBox(id, f);
+}
+// 세포분열 문항 한 칸: 실전(구글폼) 답은 보통 글씨, 연습(division-essay.html) 답은 회색 — 채점은 실전으로
+function essayField(id, f, l) {
+  const d = dreal[id], e = essay[id];
+  const show = a => ansText(f === 'mySlot' && a[f] ? DC.slotLabel(a[f]) : a[f]);
+  return `<b>${DC.esc(l)}</b>` +
+    (d ? `<span class="tag real">실전</span>${show(d.answers)}` : '<div class="nosub">실전 미제출</div>') +
+    (e ? `<div class="prac"><span class="tag prac">연습</span>${show(e.answers || {})}</div>` : '');
 }
 function fbBox(id, f) {
   const v = ((pfb[id] || {})[f] || {}).text || '';
@@ -316,12 +356,15 @@ window.openStu = function (i) {
     if (src === 'panda') {
       const rr = real[s.id];
       h += `<div class="sec"><h4>${title} <span class="dc-muted" style="font-weight:400">· ${rr ? `실전 제출 ${DC.fmtTime(rr.ts)}` : '<span style="color:var(--danger)">실전 미제출</span>'} · ${rec ? `연습 저장 ${DC.fmtTime(rec.updatedAt)}` : '연습 없음'}${a.team || a.role ? ` · ${a.team ? DC.esc(a.team) + '모둠' : ''} ${DC.esc([].concat(a.role || []).join(', '))}` : ''}</span></h4>`;
+    } else if (src === 'essay') {
+      const d = dreal[s.id], sl = (d || rec || {}).answers ? (d || rec).answers.mySlot : '';
+      h += `<div class="sec"><h4>${title} <span class="dc-muted" style="font-weight:400">· ${d ? `실전 제출 ${DC.fmtTime(d.ts)}` : '<span style="color:var(--danger)">실전 미제출</span>'} · ${rec ? `연습 저장 ${DC.fmtTime(rec.updatedAt)}` : '연습 없음'}${sl ? ` · ${DC.esc(DC.slotLabel(sl))}` : ''}</span></h4>`;
     } else if (src === 'peer') {
       h += `<div class="sec"><h4>${title} <span class="dc-muted" style="font-weight:400">· 평가한 모둠 ${peerOf(s.id).length} / ${peerNeed(s.id)}</span></h4>`;
     } else
     h += `<div class="sec"><h4>${title} ${rec ? `<span class="dc-muted" style="font-weight:400">· 저장 ${DC.fmtTime(rec.updatedAt)}${src === 'panda' && (a.team || a.role) ? ` · ${a.team ? DC.esc(a.team) + '모둠' : ''} ${DC.esc([].concat(a.role || []).join(', '))}` : ''}${src === 'essay' && a.mySlot ? ` · ${DC.esc(DC.slotLabel(a.mySlot))}` : ''}</span>` : '<span style="color:var(--danger)">· 미제출</span>'}</h4>`;
     CRIT.filter(c => c.src === src).forEach(c => {
-      h += '<div class="crit"><div class="ans">' + (src === 'peer' ? peerHtml(s.id) : '') + c.fields.map(([f, l]) => src === 'panda' ? pandaField(s.id, f, l, a) : `<b>${DC.esc(l)}</b>${ansText(f === 'mySlot' && a[f] ? DC.slotLabel(a[f]) : a[f])}`).join('') +
+      h += '<div class="crit"><div class="ans">' + (src === 'peer' ? peerHtml(s.id) : '') + c.fields.map(([f, l]) => src === 'panda' ? pandaField(s.id, f, l, a) : src === 'essay' ? essayField(s.id, f, l) : `<b>${DC.esc(l)}</b>${ansText(a[f])}`).join('') +
         (c.id === 'p5' ? `<b>연습 전체 피드백</b>${fbBox(s.id, 'all')}` : '') + '</div>' +
         `<div class="scorebox"><div class="ttl">${DC.esc(c.label)} <span class="dc-muted">/${c.max}</span></div>` +
         `<div class="pts" data-crit="${c.id}">` + Array.from({ length: c.max + 1 }, (_, p) => `<button class="${has(sc[c.id]) && +sc[c.id] === p ? 'on' : ''}" onclick="setScore('${c.id}',${p})">${p}</button>`).join('') +
@@ -415,14 +458,15 @@ window.exportCsv = function () {
   const q = v => '"' + String(v === undefined || v === null ? '' : v).replace(/"/g, '""') + '"';
   const head = ['학번', '번호', '이름', ...CRIT.map(c => `${c.short}(${c.max})`), `합계(${MAX_TOTAL})`, '메모',
     '판다 실전 제출', '판다:역할', '모둠 검정/갈색', '반 검정/갈색', '실전1', '실전2', '실전3', '실전4', '실전5', '연습1', '연습2', '연습3', '연습4', '연습5',
-    '논술:모둠', '모둠 매체', '모둠 분열', '1-①적절한 이유', '1-②한계점', '문항2 매체', '2-①체세포', '2-②감수', '3.비교·분석', '4-①흥미로운 사실', '4-②삶에 미칠 영향', '동료평가 모둠 수'];
+    '세포 실전 제출', '논술:모둠', '모둠 매체', '모둠 분열', '1-①적절한 이유', '1-②한계점', '문항2 매체', '2-①체세포', '2-②감수', '3.비교·분석', '4-①흥미로운 사실', '4-②삶에 미칠 영향', '동료평가 모둠 수'];
   const lines = [head.map(q).join(',')];
   list.forEach(s => {
-    const sc = scores[s.id] || {}, pa = (panda[s.id] || {}).answers || {}, ea = (essay[s.id] || {}).answers || {}, ra = real[s.id] || {}, rc = ra.counts || {};
+    const sc = scores[s.id] || {}, pa = (panda[s.id] || {}).answers || {}, ra = real[s.id] || {}, rc = ra.counts || {};
+    const dr = dreal[s.id], ea = (dr || {}).answers || {}; // 세포분열 칸은 채점 대상인 실전 답
     lines.push([s.id, s.num, s.name, ...CRIT.map(c => sc[c.id]), graded(sc) ? total(sc) : '', sc.memo,
       ra.ts ? DC.fmtTime(ra.ts) : '', ra.role || [].concat(pa.role || []).join(', '), rc.gb !== undefined ? `${rc.gb}/${rc.gr}` : '', rc.cb !== undefined ? `${rc.cb}/${rc.cr}` : '',
       ra.q1, ra.q2, ra.q3, ra.q4, ra.q5, pa.q1, pa.q2, pa.q3, pa.q4, pa.q5,
-      DC.slot(ea.mySlot) ? DC.slot(ea.mySlot).no + '모둠' : '', ea.myMedia, ea.myDivision, ea.q1Why, ea.q1Limit, ea.otherMedia, ea.q2Mitosis, ea.q2Meiosis, ea.q3, ea.q4Fact, ea.q4Life, `${peerOf(s.id).length}/${peerNeed(s.id)}`].map(q).join(','));
+      dr ? DC.fmtTime(dr.ts) : '', DC.slot(ea.mySlot) ? DC.slot(ea.mySlot).no + '모둠' : '', ea.myMedia, ea.myDivision, ea.q1Why, ea.q1Limit, ea.otherMedia, ea.q2Mitosis, ea.q2Meiosis, ea.q3, ea.q4Fact, ea.q4Life, `${peerOf(s.id).length}/${peerNeed(s.id)}`].map(q).join(','));
   });
   const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
