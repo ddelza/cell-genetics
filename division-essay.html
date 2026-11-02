@@ -15,7 +15,8 @@
 <div class="wrap">
   <div id="dc-head"></div>
   <div class="cg-practice-note">✏️ <b>여기는 연습장이에요.</b> 여기에 쓴 답은 점수에 들어가지 않아요.<br>
-    실제 점수는 수업 시간에 <b>구글폼 실전 논술(시험 모드)</b>로 매겨요. 문항은 같아요. 실전에서는 이 페이지와 다른 모둠 자료를 볼 수 없으니, 연습하면서 내 말로 정리해 두세요.</div>
+    실제 점수는 수업 시간에 <b>구글폼 실전 논술(시험 모드)</b>로 매겨요. 문항은 같아요. 실전에서는 이 페이지와 다른 모둠 자료를 볼 수 없으니, 연습하면서 내 말로 정리해 두세요.<br>
+    ☁️ 쓰는 동안 <b>자동으로 서버에 저장</b>돼요. 다 못 채워도 저장되니, 다른 크롬북에서 열어도 이어 쓸 수 있어요.</div>
   <div class="card" style="font-size:0.84rem;line-height:1.65">
     <b>✍️ 개인 논술 문항 안내</b>
     <ul style="margin:6px 0 0;padding-left:20px">
@@ -30,7 +31,7 @@
 </div>
 
 <script src="session.js?v=5"></script>
-<script src="cg.js?v=6"></script>
+<script src="cg.js?v=7"></script>
 <script>
 const MEDIA_LABELS = Object.fromEntries(DC.MEDIA.map(m => [m, DC.MEDIA_ICON[m] + ' ' + m]));
 function makeGroups(slot) {
@@ -86,6 +87,7 @@ DC.start({ title: '🔬 세포분열 표현하기 · 개인 논술 연습', subt
   }
   DC.form({
     mount: '#form', key: 'essay', groups: makeGroups(slot), saveLabel: '💾 연습 저장하기',
+    allowPartial: true, autoSave: true, // 다 못 써도 저장되고, 쓰는 동안 자동 저장 — 기기에만 남았다 사라지는 일 방지
     required: ['q1Why', 'q1Limit', 'otherMedia', 'q2Mitosis', 'q2Meiosis', 'q3', 'q4Fact', 'q4Life'],
     validate: ans => {
       if (ans.otherMedia === slot.media) return '문항 2는 우리 모둠 매체가 아닌 다른 매체를 골라야 해요.';

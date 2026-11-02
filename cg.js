@@ -283,11 +283,15 @@
     (opts.groups || []).forEach(function (g) { out = out.concat(g.fields); });
     return out;
   };
-  function sameAns(a, b) { return JSON.stringify(a || {}) === JSON.stringify(b || {}); }
+  // 키 순서와 무관하게 비교 (Firebase가 돌려주는 객체는 키가 가나다순으로 정렬돼 있다)
+  function sameAns(a, b) {
+    var norm = function (o) { o = o || {}; return JSON.stringify(Object.keys(o).filter(function (k) { return !DC.isEmpty(o[k]); }).sort().map(function (k) { return [k, o[k]]; })); };
+    return norm(a) === norm(b);
+  }
 
   // ---------- 개인 응답 폼 (논술) ----------
   // opts: { mount, key, groups:[{title, fields}] 또는 fields, title, hint, saveLabel, required:[id], validate(ans)→msg,
-  //         onLoad(rec, api), onSaved(rec, api) }
+  //         allowPartial(빈칸 있어도 저장), autoSave(쓰는 동안 자동 서버 저장), onLoad(rec, api), onSaved(rec, api) }
   // 폴링하지 않는다(처음 1회 로드 + 저장 시 갱신). 입력하는 동안 이 기기에 임시저장(localStorage)해서
   // 실수로 창을 닫거나 크롬북이 꺼져도 다시 열면 이어 쓸 수 있다. 서버 저장에 성공하면 임시저장은 지운다.
   var formSeq = 0;
@@ -326,10 +330,11 @@
         '<div class="error-msg" id="' + formId + '_err"></div>' +
         '<div class="ok-msg" id="' + formId + '_ok"></div>' +
         '<button class="btn" id="' + formId + '_btn">' + DC.esc(opts.saveLabel || '💾 저장하기') + '</button>' +
+        (opts.autoSave ? '<div class="dc-muted" id="' + formId + '_auto" style="text-align:center;margin-top:6px">☁️ 쓰는 동안 몇 초마다 자동으로 서버에 저장돼요</div>' : '') +
         '<div class="dc-saved" id="' + formId + '_saved"></div>' +
         '</div>';
       renderSaved();
-      document.getElementById(formId + '_btn').onclick = save;
+      document.getElementById(formId + '_btn').onclick = function () { save(false); };
       var t = null;
       var onEdit = function (e) {
         if (e.target.tagName === 'TEXTAREA') {
@@ -338,6 +343,8 @@
         }
         clearTimeout(t);
         t = setTimeout(function () { if (!DC.isGuest()) writeDraft(api.values()); }, 400);
+        // 자동 저장: 쓰기 시작하면 몇 초 뒤 한 번 서버에 저장(쓰는 동안 계속 그 간격으로) — 기기가 바뀌거나 꺼져도 남게
+        if (opts.autoSave && !DC.isGuest() && !autoT) autoT = setTimeout(function () { autoT = null; save(true); }, AUTO_MS);
       };
       root.addEventListener('input', onEdit);
       root.addEventListener('change', onEdit);
@@ -360,19 +367,35 @@
       fields.forEach(function (f) { if (f.type !== 'info') ans[f.id] = readField(formId, f, root); });
       return ans;
     };
-    function save() {
-      var err = document.getElementById(formId + '_err'), ok = document.getElementById(formId + '_ok');
-      err.classList.remove('show'); ok.classList.remove('show');
+    // opts.allowPartial: 빈칸이 있어도 저장(빈칸은 안내만) — 연습장처럼 다 못 써도 날아가면 안 되는 곳
+    // opts.autoSave: 쓰는 동안 AUTO_MS마다 조용히 서버 저장 (2026-11-02: 다 채우지 못해 저장이 막힌 채
+    //   기기에만 남았던 3-1반 연습 글이 주말 뒤 사라진 일 — 학교 크롬북은 다음에 같은 기기를 쓴다는 보장이 없다)
+    var AUTO_MS = 5000, autoT = null, saving = false;
+    function missingLabels(ans) {
+      return (opts.required || []).filter(function (id) { return DC.isEmpty(ans[id]); }).map(function (id) {
+        var f = fields.filter(function (x) { return x.id === id; })[0]; return f ? (f.short || f.label) : id;
+      });
+    }
+    function save(auto) {
+      var err = document.getElementById(formId + '_err'), ok = document.getElementById(formId + '_ok'), st = document.getElementById(formId + '_auto');
+      if (saving) { if (auto) autoT = autoT || setTimeout(function () { autoT = null; save(true); }, AUTO_MS); return; }
       var ans = api.values();
-      var missing = (opts.required || []).filter(function (id) { return DC.isEmpty(ans[id]); });
-      if (missing.length) {
-        var labs = missing.map(function (id) { var f = fields.filter(function (x) { return x.id === id; })[0]; return f ? (f.short || f.label) : id; });
+      if (!auto) { err.classList.remove('show'); ok.classList.remove('show'); }
+      var labs = missingLabels(ans);
+      if (labs.length && !opts.allowPartial && !auto) {
         err.textContent = '아직 비어 있는 칸이 있어요: ' + labs.join(', ');
         err.classList.add('show'); return;
       }
-      if (opts.validate) { var msg = opts.validate(ans); if (msg) { err.textContent = msg; err.classList.add('show'); return; } }
+      if (opts.validate) {
+        var msg = opts.validate(ans);
+        if (msg) { if (!auto) { err.textContent = msg; err.classList.add('show'); } return; }
+      }
+      // validate가 덧붙이는 값(모둠 정보 등)까지 넣은 뒤 비교 — 바뀐 게 없으면 자동 저장 안 함
+      if (auto && api.record && sameAns(ans, api.record.answers || {})) return;
       var btn = document.getElementById(formId + '_btn');
-      btn.disabled = true; btn.textContent = '저장 중...';
+      saving = true;
+      if (!auto) { btn.disabled = true; btn.textContent = '저장 중...'; }
+      else if (st) st.textContent = '☁️ 자동 저장 중...';
       var s = DC.student;
       var rec = { id: s.id, name: s.name, ban: DC.myBan(), num: s.num || 0, answers: ans, updatedAt: Date.now() };
       DC.put(path, rec).then(function () {
@@ -380,12 +403,17 @@
         if (!DC.isGuest()) clearDraft();
         var note = root.querySelector('.cg-draft-note'); if (note) note.remove();
         renderSaved();
-        ok.textContent = DC.isGuest() ? '🧪 체험 모드라 서버에는 저장되지 않았어요.' : '저장되었어요! (' + DC.fmtTime(rec.updatedAt) + ') 끝날 때까지 몇 번이든 고쳐서 다시 저장할 수 있어요.';
-        ok.classList.add('show');
+        if (st) st.textContent = '☁️ ' + (auto ? '자동 ' : '') + '저장됨 ' + DC.fmtTime(rec.updatedAt);
+        if (!auto) {
+          ok.textContent = DC.isGuest() ? '🧪 체험 모드라 서버에는 저장되지 않았어요.'
+            : '저장되었어요! (' + DC.fmtTime(rec.updatedAt) + ') ' + (labs.length ? '아직 빈 칸: ' + labs.join(', ') + ' — 이어서 써도 돼요.' : '끝날 때까지 몇 번이든 고쳐서 다시 저장할 수 있어요.');
+          ok.classList.add('show');
+        }
         if (opts.onSaved) opts.onSaved(rec, api);
       }).catch(function (e) {
+        if (auto) { if (st) st.textContent = '⚠️ 자동 저장 실패 — 인터넷 연결을 확인하고 저장 버튼을 눌러 주세요.'; return; }
         err.textContent = e.message + ' — 인터넷 연결을 확인하고 다시 눌러 주세요. (쓴 내용은 이 기기에 임시저장되어 있어요)'; err.classList.add('show');
-      }).then(function () { btn.disabled = false; btn.textContent = opts.saveLabel || '💾 저장하기'; });
+      }).then(function () { saving = false; if (!auto) { btn.disabled = false; btn.textContent = opts.saveLabel || '💾 저장하기'; } });
     }
     return api;
   };
