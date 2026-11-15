@@ -23,6 +23,12 @@ table.grid { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
 .grid td.miss { color: #ccc; }
 .grid td.sc { font-weight: 700; }
 .grid td.sc.empty { color: #ccc; font-weight: 400; }
+.grid td.sc.low { color: var(--danger); } /* 만점이 아닌 점수 */
+.grid td.sc.ai { font-style: italic; }     /* AI가 매긴 점수 (선생님이 누르면 확정) */
+.grid td.sc .flag { display: inline-block; min-width: 24px; height: 24px; line-height: 20px; border: 2px solid var(--danger); border-radius: 50%; font-style: normal; } /* AI가 애매하다고 본 칸 */
+.pts button.on.low { background: var(--danger); border-color: var(--danger); }
+.aiflag { font-size: 0.76rem; color: var(--danger); background: var(--danger-soft); border-radius: 8px; padding: 5px 8px; margin-bottom: 6px; font-weight: 600; }
+.aitag { font-size: 0.72rem; color: #666; margin-bottom: 4px; }
 .grid td.total { font-weight: 800; color: var(--accent); }
 .grid td.memo { text-align: left; max-width: 180px; overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); }
 .grid tr.sum td { background: #f8f9fc; font-weight: 700; }
@@ -98,7 +104,8 @@ table.grid { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
       <button class="btn small secondary" id="scoreToggle" onclick="toggleScore()">📊 학생 점수 …</button>
       <a class="btn small secondary" href="my-score.html" target="_blank" rel="noopener" style="text-decoration:none;text-align:center">👀 학생 점수 확인판 보기</a>
     </div>
-    <p class="hint">학생 줄을 누르면 답안을 보며 채점할 수 있어요. 점수 버튼을 누르면 바로 저장돼요. (모둠 자료 페이지는 학생 화면에서 교사 계정 3000/김병선으로 로그인돼 있어야 열려요)</p>
+    <p class="hint">학생 줄을 누르면 답안을 보며 채점할 수 있어요. 점수 버튼을 누르면 바로 저장돼요. (모둠 자료 페이지는 학생 화면에서 교사 계정 3000/김병선으로 로그인돼 있어야 열려요)<br>
+      <span style="color:var(--danger);font-weight:700">빨간 숫자</span> = 만점이 아닌 점수 · <i>기울임</i> = AI가 매긴 점수(선생님이 누르면 확정) · <span style="display:inline-block;width:18px;height:18px;border:2px solid var(--danger);border-radius:50%;vertical-align:middle"></span> = AI가 판단이 애매했던 칸(마우스를 올리면 이유) <b id="flagInfo"></b></p>
     <div class="grid-wrap"><table class="grid" id="grid"></table></div>
   </div>
 </div>
@@ -210,7 +217,11 @@ function renderGrid() {
       (d ? `<td class="done" title="${DC.fmtTime(d.ts)}">✓</td>` : '<td class="miss">·</td>') +
       (e ? `<td class="done" style="color:#aaa" title="${DC.fmtTime(e.updatedAt)}">✓</td>` : '<td class="miss">·</td>') +
       `<td title="${DC.escAttr(DC.slotLabel(ea.mySlot))}">${d || e ? `${DC.MEDIA_ICON[ea.myMedia] || ''}${DC.DIV_ICON[ea.myDivision] || ''}→${DC.MEDIA_ICON[ea.otherMedia] || ''}` : ''}</td>` +
-      CRIT.map(c => sc && has(sc[c.id]) ? `<td class="sc">${sc[c.id]}</td>` : '<td class="sc empty">-</td>').join('') +
+      CRIT.map(c => {
+        if (!(sc && has(sc[c.id]))) return '<td class="sc empty">-</td>';
+        const v = +sc[c.id], ai = (sc.ai || {})[c.id], fl = (sc.aiFlag || {})[c.id];
+        return `<td class="sc${v < c.max ? ' low' : ''}${ai ? ' ai' : ''}" title="${ai ? '🤖 AI 채점' : '선생님 채점'}${fl ? ' · 애매: ' + DC.escAttr(fl) : ''}">${fl ? `<span class="flag">${v}</span>` : v}</td>`;
+      }).join('') +
       `<td class="total">${graded(sc) ? total(sc) : ''}</td><td class="memo">${sc && sc.memo ? DC.esc(sc.memo) : ''}</td></tr>`;
   });
   const cnt = d => list.filter(s => d[s.id]).length;
@@ -218,6 +229,9 @@ function renderGrid() {
   h += `<tr class="sum"><td></td><td class="name">${list.length}명</td><td>${cnt(real)}</td><td>${cnt(panda)}</td><td>${cnt(dreal)}</td><td>${cnt(essay)}</td><td></td>` +
     CRIT.map(c => `<td title="평균">${avg(c)}</td>`).join('') + '<td></td><td></td></tr>';
   document.getElementById('grid').innerHTML = h;
+  const nFlag = list.reduce((n, s) => n + Object.keys((scores[s.id] || {}).aiFlag || {}).length, 0);
+  const nAi = list.reduce((n, s) => n + Object.keys((scores[s.id] || {}).ai || {}).length, 0);
+  document.getElementById('flagInfo').textContent = nAi ? ` — 이 반: AI 점수 ${nAi}칸 중 애매한 칸 ${nFlag}개 남음` : '';
 }
 
 // 판다 문항 한 칸: 실전(구글폼) 답은 보통 글씨, 연습(panda.html) 답은 회색 + 연습 피드백 입력칸
@@ -295,7 +309,9 @@ window.openStu = function (i) {
       h += '<div class="crit"><div class="ans">' + (src === 'peer' ? peerHtml(s.id) : '') + c.fields.map(([f, l]) => src === 'panda' ? pandaField(s.id, f, l, a) : src === 'essay' ? essayField(s.id, f, l) : `<b>${DC.esc(l)}</b>${ansText(a[f])}`).join('') +
         (c.id === 'p5' ? `<b>연습 전체 피드백</b>${fbBox(s.id, 'all')}` : '') + '</div>' +
         `<div class="scorebox"><div class="ttl">${DC.esc(c.label)} <span class="dc-muted">/${c.max}</span></div>` +
-        `<div class="pts" data-crit="${c.id}">` + Array.from({ length: c.max - (c.min || 0) + 1 }, (_, i) => i + (c.min || 0)).map(p => `<button data-p="${p}" class="${has(sc[c.id]) && +sc[c.id] === p ? 'on' : ''}" onclick="setScore('${c.id}',${p})">${p}</button>`).join('') +
+        ((sc.aiFlag || {})[c.id] ? `<div class="aiflag" data-aiflag="${c.id}">⭕ AI가 애매하다고 본 점수 — ${DC.esc(sc.aiFlag[c.id])}</div>` : '') +
+        ((sc.ai || {})[c.id] ? `<div class="aitag" data-aitag="${c.id}">🤖 AI가 매긴 점수예요. 점수 버튼을 누르면 선생님 점수로 확정돼요.</div>` : '') +
+        `<div class="pts" data-crit="${c.id}">` + Array.from({ length: c.max - (c.min || 0) + 1 }, (_, i) => i + (c.min || 0)).map(p => `<button data-p="${p}" class="${has(sc[c.id]) && +sc[c.id] === p ? 'on' + (p < c.max ? ' low' : '') : ''}" onclick="setScore('${c.id}',${p})">${p}</button>`).join('') +
         `<button class="clear" onclick="setScore('${c.id}',null)">지우기</button></div>` +
         (c.note ? `<div class="dc-muted" style="font-size:0.74rem;margin-bottom:4px">${DC.esc(c.note)}</div>` : '') +
         '<div class="rub">' + c.rubric.map(([t, rows]) => (t ? `<div style="font-weight:700;margin-top:4px">${DC.esc(t)}</div>` : '') + rows.map(([p, d]) => `<div><i>${p}</i> ${DC.esc(d)}</div>`).join('')).join('') + '</div>' +
@@ -400,8 +416,16 @@ window.showMissing = async function () {
 window.closeModal = function () { document.getElementById('modal').classList.remove('show'); renderGrid(); };
 
 window.setScore = function (cid, p) {
-  document.querySelectorAll(`.pts[data-crit="${cid}"] button:not(.clear)`).forEach(b => b.classList.toggle('on', +b.dataset.p === p)); // 최하점이 1점인 항목은 버튼이 1부터
-  saveScores({ [cid]: p });
+  const c = CRIT.find(x => x.id === cid);
+  document.querySelectorAll(`.pts[data-crit="${cid}"] button:not(.clear)`).forEach(b => { // 최하점이 1점인 항목은 버튼이 1부터
+    b.classList.toggle('on', +b.dataset.p === p);
+    b.classList.toggle('low', +b.dataset.p === p && p < c.max);
+  });
+  // 선생님이 직접 누르면 그 칸은 확정 — AI 채점 표시(ai)와 애매 표시(aiFlag)를 지운다
+  const cur = scores[list[curIdx].id] || {};
+  const strip = o => { const x = Object.assign({}, o || {}); delete x[cid]; return Object.keys(x).length ? x : null; };
+  document.querySelectorAll(`[data-aiflag="${cid}"], [data-aitag="${cid}"]`).forEach(el => el.remove());
+  saveScores({ [cid]: p, ai: strip(cur.ai), aiFlag: strip(cur.aiFlag) });
 };
 
 async function saveScores(patch) {
