@@ -27,6 +27,8 @@ table.grid { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
 .grid td.sc.ai { font-style: italic; }     /* AI가 매긴 점수 (선생님이 누르면 확정) */
 .grid td.sc .flag { display: inline-block; min-width: 24px; height: 24px; line-height: 20px; border: 2px solid var(--danger); border-radius: 50%; font-style: normal; } /* AI가 애매하다고 본 칸 */
 .grid td.sc .flag.blue { border-color: #1c7ed6; } /* 일관성 검토에서 다시 볼 칸 */
+.grid td.sc .flag.yellow { border-color: #f59f00; background: #fff9db; } /* 판다 일관성 검토에서 다시 볼 칸 */
+.ckflag { font-size: 0.76rem; color: #8a5a00; background: #fff3bf; border-radius: 8px; padding: 5px 8px; margin-bottom: 6px; font-weight: 600; }
 .pts button.on.low { background: var(--danger); border-color: var(--danger); }
 .rvflag { font-size: 0.76rem; color: #1864ab; background: #e7f5ff; border-radius: 8px; padding: 5px 8px; margin-bottom: 6px; font-weight: 600; }
 .aiflag { font-size: 0.76rem; color: var(--danger); background: var(--danger-soft); border-radius: 8px; padding: 5px 8px; margin-bottom: 6px; font-weight: 600; }
@@ -107,7 +109,7 @@ table.grid { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
       <a class="btn small secondary" href="my-score.html" target="_blank" rel="noopener" style="text-decoration:none;text-align:center">👀 학생 점수 확인판 보기</a>
     </div>
     <p class="hint">학생 줄을 누르면 답안을 보며 채점할 수 있어요. 점수 버튼을 누르면 바로 저장돼요. (모둠 자료 페이지는 학생 화면에서 교사 계정 3000/김병선으로 로그인돼 있어야 열려요)<br>
-      <span style="color:var(--danger);font-weight:700">빨간 숫자</span> = 만점이 아닌 점수 · <i>기울임</i> = AI가 매긴 점수(선생님이 누르면 확정) · <span style="display:inline-block;width:18px;height:18px;border:2px solid var(--danger);border-radius:50%;vertical-align:middle"></span> = AI가 판단이 애매했던 칸 · <span style="display:inline-block;width:18px;height:18px;border:2px solid #1c7ed6;border-radius:50%;vertical-align:middle"></span> = 일관성 검토에서 다시 볼 칸 (마우스를 올리면 이유, 점수 버튼을 누르면 표시가 사라져요) <b id="flagInfo"></b></p>
+      <span style="color:var(--danger);font-weight:700">빨간 숫자</span> = 만점이 아닌 점수 · <i>기울임</i> = AI가 매긴 점수(선생님이 누르면 확정) · <span style="display:inline-block;width:18px;height:18px;border:2px solid var(--danger);border-radius:50%;vertical-align:middle"></span> = AI가 판단이 애매했던 칸 · <span style="display:inline-block;width:18px;height:18px;border:2px solid #1c7ed6;border-radius:50%;vertical-align:middle"></span> = 세포분열 일관성 검토에서 다시 볼 칸 · <span style="display:inline-block;width:18px;height:18px;border:2px solid #f59f00;background:#fff9db;border-radius:50%;vertical-align:middle"></span> = 판다 일관성 검토에서 다시 볼 칸 (마우스를 올리면 이유, 점수 버튼을 누르면 표시가 사라져요) <b id="flagInfo"></b></p>
     <div class="grid-wrap"><table class="grid" id="grid"></table></div>
   </div>
 </div>
@@ -221,8 +223,8 @@ function renderGrid() {
       `<td title="${DC.escAttr(DC.slotLabel(ea.mySlot))}">${d || e ? `${DC.MEDIA_ICON[ea.myMedia] || ''}${DC.DIV_ICON[ea.myDivision] || ''}→${DC.MEDIA_ICON[ea.otherMedia] || ''}` : ''}</td>` +
       CRIT.map(c => {
         if (!(sc && has(sc[c.id]))) return '<td class="sc empty">-</td>';
-        const v = +sc[c.id], ai = (sc.ai || {})[c.id], fl = (sc.aiFlag || {})[c.id], rv = (sc.reviewFlag || {})[c.id];
-        return `<td class="sc${v < c.max ? ' low' : ''}${ai ? ' ai' : ''}" title="${ai ? '🤖 AI 채점' : '선생님 채점'}${fl ? ' · 애매: ' + DC.escAttr(fl) : ''}${rv ? ' · 일관성 검토: ' + DC.escAttr(rv) : ''}">${rv ? `<span class="flag blue">${v}</span>` : fl ? `<span class="flag">${v}</span>` : v}</td>`;
+        const v = +sc[c.id], ai = (sc.ai || {})[c.id], fl = (sc.aiFlag || {})[c.id], rv = (sc.reviewFlag || {})[c.id], ck = (sc.pandaCheck || {})[c.id];
+        return `<td class="sc${v < c.max ? ' low' : ''}${ai ? ' ai' : ''}" title="${ai ? '🤖 AI 채점' : '선생님 채점'}${fl ? ' · 애매: ' + DC.escAttr(fl) : ''}${rv || ck ? ' · 일관성 검토: ' + DC.escAttr(rv || ck) : ''}">${ck ? `<span class="flag yellow">${v}</span>` : rv ? `<span class="flag blue">${v}</span>` : fl ? `<span class="flag">${v}</span>` : v}</td>`;
       }).join('') +
       `<td class="total">${graded(sc) ? total(sc) : ''}</td><td class="memo">${sc && sc.memo ? DC.esc(sc.memo) : ''}</td></tr>`;
   });
@@ -234,7 +236,8 @@ function renderGrid() {
   const nFlag = list.reduce((n, s) => n + Object.keys((scores[s.id] || {}).aiFlag || {}).length, 0);
   const nAi = list.reduce((n, s) => n + Object.keys((scores[s.id] || {}).ai || {}).length, 0);
   const nRv = list.reduce((n, s) => n + Object.keys((scores[s.id] || {}).reviewFlag || {}).length, 0);
-  document.getElementById('flagInfo').textContent = (nAi ? ` — 이 반: AI 점수 ${nAi}칸 중 애매한 칸 ${nFlag}개 남음` : '') + (nRv ? ` · 🔵 다시 볼 칸 ${nRv}개` : '');
+  const nCk = list.reduce((n, s) => n + Object.keys((scores[s.id] || {}).pandaCheck || {}).length, 0);
+  document.getElementById('flagInfo').textContent = (nAi ? ` — 이 반: AI 점수 ${nAi}칸 중 애매한 칸 ${nFlag}개 남음` : '') + (nRv ? ` · 🔵 다시 볼 칸 ${nRv}개` : '') + (nCk ? ` · 🟡 판다 다시 볼 칸 ${nCk}개` : '');
 }
 
 // 판다 문항 한 칸: 실전(구글폼) 답은 보통 글씨, 연습(panda.html) 답은 회색 + 연습 피드백 입력칸
@@ -314,6 +317,7 @@ window.openStu = function (i) {
         `<div class="scorebox"><div class="ttl">${DC.esc(c.label)} <span class="dc-muted">/${c.max}</span></div>` +
         ((sc.aiFlag || {})[c.id] ? `<div class="aiflag" data-aiflag="${c.id}">⭕ AI가 애매하다고 본 점수 — ${DC.esc(sc.aiFlag[c.id])}</div>` : '') +
         ((sc.reviewFlag || {})[c.id] ? `<div class="rvflag" data-rvflag="${c.id}">🔵 일관성 검토 — ${DC.esc(sc.reviewFlag[c.id])}</div>` : '') +
+        ((sc.pandaCheck || {})[c.id] ? `<div class="ckflag" data-ckflag="${c.id}">🟡 판다 일관성 검토 — ${DC.esc(sc.pandaCheck[c.id])}</div>` : '') +
         ((sc.ai || {})[c.id] ? `<div class="aitag" data-aitag="${c.id}">🤖 AI가 매긴 점수예요. 점수 버튼을 누르면 선생님 점수로 확정돼요.</div>` : '') +
         `<div class="pts" data-crit="${c.id}">` + Array.from({ length: c.max - (c.min || 0) + 1 }, (_, i) => i + (c.min || 0)).map(p => `<button data-p="${p}" class="${has(sc[c.id]) && +sc[c.id] === p ? 'on' + (p < c.max ? ' low' : '') : ''}" onclick="setScore('${c.id}',${p})">${p}</button>`).join('') +
         `<button class="clear" onclick="setScore('${c.id}',null)">지우기</button></div>` +
@@ -428,8 +432,9 @@ window.setScore = function (cid, p) {
   // 선생님이 직접 누르면 그 칸은 확정 — AI 채점 표시(ai)와 애매 표시(aiFlag)를 지운다
   const cur = scores[list[curIdx].id] || {};
   const strip = o => { const x = Object.assign({}, o || {}); delete x[cid]; return Object.keys(x).length ? x : null; };
-  document.querySelectorAll(`[data-aiflag="${cid}"], [data-aitag="${cid}"], [data-rvflag="${cid}"]`).forEach(el => el.remove());
-  saveScores({ [cid]: p, ai: strip(cur.ai), aiFlag: strip(cur.aiFlag), reviewFlag: strip(cur.reviewFlag) }); // 파란 동그라미(일관성 검토)도 함께 확정
+  document.querySelectorAll(`[data-aiflag="${cid}"], [data-aitag="${cid}"], [data-rvflag="${cid}"], [data-ckflag="${cid}"]`).forEach(el => el.remove());
+  // 파란 동그라미(세포분열 일관성 검토)·노란 동그라미(판다 일관성 검토)도 함께 확정
+  saveScores({ [cid]: p, ai: strip(cur.ai), aiFlag: strip(cur.aiFlag), reviewFlag: strip(cur.reviewFlag), pandaCheck: strip(cur.pandaCheck) });
 };
 
 async function saveScores(patch) {
